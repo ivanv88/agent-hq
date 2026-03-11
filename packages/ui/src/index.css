@@ -1,0 +1,153 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* ─── Surface colors (background elevation) ─── */
+  --color-surface-base: #07070f;
+  --color-surface-raised: #0c0c18;
+  --color-surface-overlay: #111120;
+  --color-surface-hover: #191930;
+  --color-surface-active: #1e1e30;
+  --color-surface-inset: #1a1a28;
+
+  /* ─── Border colors ─── */
+  --color-border-subtle: #0d0d18;
+  --color-border-dim: #10101c;
+  --color-border-default: #13131f;
+  --color-border-emphasis: #1e1e30;
+  --color-border-accent: #3b3b60;
+
+  /* ─── Text colors ─── */
+  --color-text-ghost: #444;
+  --color-text-disabled: #555;
+  --color-text-muted: #666;
+  --color-text-default: #888;
+  --color-text-body: #b0b0c8;
+  --color-text-bright: #c0c0e0;
+  --color-text-heading: #d4d4e8;
+
+  /* ─── Accent colors ─── */
+  --color-accent-primary: #9898d0;
+  --color-accent-primary-bright: #6060a0;
+  --color-accent-subtle: #3a3a56;
+
+  /* ─── Status colors (for Tailwind utilities) ─── */
+  --color-status-working: #4ade80;
+  --color-status-spawning: #a78bfa;
+  --color-status-spinning: #fb923c;
+  --color-status-ready: #f0c040;
+  --color-status-done: #60a5fa;
+  --color-status-failed: #f87171;
+  --color-status-killed: #555;
+
+  /* ─── Status background colors ─── */
+  --color-status-working-bg: #0a1f10;
+  --color-status-spawning-bg: #14102a;
+  --color-status-ready-bg: #2a2010;
+  --color-status-done-bg: #0a1020;
+  --color-status-failed-bg: #1f0a0a;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html, body {
+    font-size: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+}
+
+:root {
+  /* Legacy variables (for JS access and backward compat) */
+  --bg:           #080810;
+  --surface:      var(--color-surface-base);
+  --surface2:     #060610;
+  --surface3:     var(--color-surface-raised);
+  --border:       var(--color-border-default);
+  --border2:      var(--color-border-emphasis);
+  --border3:      #2a2a3e;
+  --text:         var(--color-text-heading);
+  --text-muted:   var(--color-text-muted);
+  --text-dim:     #444;
+  --text-ghost:   #2e2e44;
+  --text-bright:  var(--color-text-bright);
+  --text-active:  var(--color-text-bright);
+
+  /* Status colours (used by JS/CSS classes) */
+  --c-ready:      var(--color-status-ready);
+  --c-ready-bg:   var(--color-status-ready-bg);
+  --c-working:    var(--color-status-working);
+  --c-working-bg: var(--color-status-working-bg);
+  --c-spinning:   var(--color-status-spinning);
+  --c-spinning-bg:#1f1208;
+  --c-done:       var(--color-status-done);
+  --c-done-bg:    var(--color-status-done-bg);
+  --c-failed:     var(--color-status-failed);
+  --c-failed-bg:  var(--color-status-failed-bg);
+  --c-spawning:   var(--color-status-spawning);
+  --c-spawning-bg:var(--color-status-spawning-bg);
+  --c-killed:     var(--color-status-killed);
+  --c-killed-bg:  #111;
+  --c-paused:     var(--color-status-done);
+  --c-limited:    var(--color-status-spinning);
+}
+
+body {
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', 'Courier New', monospace;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a4a; }
+
+/* Animations */
+@keyframes pulseOpacity {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { opacity: 0.5; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.animate-pulse-opacity { animation: pulseOpacity 1.6s ease infinite; }
+.animate-slide-in      { animation: slideIn 0.18s ease both; }
+.animate-fade-up       { animation: fadeUp 0.18s ease both; }
+.animate-shimmer       { animation: shimmer 1s infinite; }
+
+/* Status colours */
+.status-SPAWNING        { color: var(--c-spawning); }
+.status-WORKING         { color: var(--c-working); }
+.status-SPINNING        { color: var(--c-spinning); }
+.status-RATE_LIMITED    { color: var(--c-limited); }
+.status-PAUSED          { color: var(--c-paused); }
+.status-READY           { color: var(--c-ready); }
+.status-DISCARDED       { color: var(--c-killed); }
+.status-DONE            { color: var(--c-done); }
+.status-FAILED          { color: var(--c-failed); }
+.status-KILLED          { color: var(--c-killed); }

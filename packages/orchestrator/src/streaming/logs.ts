@@ -1,0 +1,145 @@
+import { EventEmitter } from 'events';
+import { appendChunk, flushLogs, getLastNChunks } from '../db/logs.js';
+
+export const logEmitter = new EventEmitter();
+logEmitter.setMaxListeners(500);
+
+// In-memory ring buffers: taskId → last 500 lines
+const ringBuffers = new Map<string, string[]>();
+export const RING_SIZE = 500;
+
+// Track which tasks currently have an active log stream piped in
+const activeStreams = new Set<string>();
+
+export function hasActiveStream(taskId: string): boolean {
+  return activeStreams.has(taskId);
+}
+
+export function getRingBuffer(taskId: string): string[] {
+  return ringBuffers.get(taskId) ?? [];
+}
+
+export function initRingBuffer(taskId: string, initial: string[]): void {
+  ringBuffers.set(taskId, initial.slice(-RING_SIZE));
+}
+
+export function startLogPipe(taskId: string, stream: NodeJS.ReadableStream): void {
+  // Ensure ring buffer exists
+  if (!ringBuffers.has(taskId)) {
+    ringBuffers.set(taskId, []);
+  }
+
+  activeStreams.add(taskId);
+
+  let buffer = '';
+  // Each stream gets its own demuxer so split-frame state is preserved across
+  // consecutive data events (frames can span multiple TCP chunks).
+  const demux = createDockerDemuxer();
+
+  stream.on('data', (chunk: Buffer) => {
+    // Dockerode exec streams prepend an 8-byte header per frame
+    // We need to strip the header bytes (Issue 28 — using exec stream)
+    const raw = demux(chunk);
+    buffer += raw;
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? ''; // keep incomplete line
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      pushLine(taskId, line);
+    }
+  });
+
+  stream.on('end', () => {
+    if (buffer.trim()) {
+      pushLine(taskId, buffer);
+    }
+    flushLogs(); // drain write queue immediately so no lines are lost
+    activeStreams.delete(taskId);
+    logEmitter.emit(`end:${taskId}`);
+  });
+
+  stream.on('error', (err) => {
+    console.error(`Log pipe error for task ${taskId}:`, err);
+    flushLogs();
+    activeStreams.delete(taskId);
+    logEmitter.emit(`end:${taskId}`);
+  });
+}
+
+function pushLine(taskId: string, line: string): void {
+  const buf = ringBuffers.get(taskId) ?? [];
+  buf.push(line);
+  if (buf.length > RING_SIZE) {
+    buf.shift();
+  }
+  ringBuffers.set(taskId, buf);
+
+  // Persist to DB
+  appendChunk(taskId, line);
+
+  // Emit for subscribers (SSE, cost parser, etc.)
+  logEmitter.emit(`log:${taskId}`, line);
+}
+
+/**
+ * Docker multiplexed stream format:
+ * [stream type: 1 byte][padding: 3 bytes][size: 4 bytes (big-endian)][payload]
+ * stream type: 1=stdout, 2=stderr
+ *
+ * Returns a stateful demuxer closure. State must persist across data events
+ * because Docker frames can be split across multiple TCP chunks.
+ */
+function createDockerDemuxer(): (chunk: Buffer) => string {
+  let headerBuf = Buffer.alloc(0); // accumulates partial header bytes
+  let remainingPayload = 0;        // payload bytes still expected for current frame
+  let streamType = 0;              // stream type of the frame currently being read
+
+  return function demux(chunk: Buffer): string {
+    let result = '';
+    let offset = 0;
+
+    while (offset < chunk.length) {
+      // ── Reading payload bytes for an already-parsed frame header ──────────
+      if (remainingPayload > 0) {
+        const take = Math.min(remainingPayload, chunk.length - offset);
+        if (streamType === 1 || streamType === 2) {
+          result += chunk.slice(offset, offset + take).toString('utf8');
+        }
+        offset += take;
+        remainingPayload -= take;
+        continue;
+      }
+
+      // ── Reading / completing an 8-byte frame header ───────────────────────
+      const headerNeeded = 8 - headerBuf.length;
+      if (chunk.length - offset < headerNeeded) {
+        // Not enough bytes to finish the header — save remainder for next chunk
+        headerBuf = Buffer.concat([headerBuf, chunk.slice(offset)]);
+        break;
+      }
+
+      const header = headerBuf.length > 0
+        ? Buffer.concat([headerBuf, chunk.slice(offset, offset + headerNeeded)])
+        : chunk.slice(offset, offset + 8);
+
+      headerBuf = Buffer.alloc(0);
+      offset += headerNeeded;
+
+      streamType = header[0];
+      const size = header.readUInt32BE(4);
+      if (size === 0) continue; // empty frame, proceed to next header
+
+      remainingPayload = size;
+      // Loop back to consume the payload
+    }
+
+    return result;
+  };
+}
+
+export function preloadFromDb(taskId: string): void {
+  const chunks = getLastNChunks(taskId, 500);
+  ringBuffers.set(taskId, chunks);
+}

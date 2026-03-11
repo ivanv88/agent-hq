@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.db
+.env
+*.db-shm
+*.db-wal
+packages/orchestrator/public/
+.DS_Store
