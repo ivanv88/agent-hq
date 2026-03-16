@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const SpawnTaskInputSchema = z.object({
   repoPath: z.string().min(1),
-  prompt: z.string().min(1),
+  prompt: z.string(),
   taskType: z.enum(['feature', 'fix', 'refactor', 'test', 'chore', 'docs']).optional(),
   oversightMode: z.enum(['GATE_ON_COMPLETION', 'GATE_ALWAYS', 'NOTIFY_ONLY']).optional(),
   model: z.string().optional(),
@@ -13,6 +13,8 @@ export const SpawnTaskInputSchema = z.object({
   anthropicBaseUrl: z.string().url().optional().or(z.literal('')),
   ticket: z.string().optional(),
   branchName: z.string().optional(),
+  workflowName: z.string().optional(),
+  skippedStages: z.array(z.string()).optional(),
 });
 
 export const FeedbackInputSchema = z.object({

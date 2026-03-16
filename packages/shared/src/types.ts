@@ -15,6 +15,8 @@ export type OversightMode = 'GATE_ON_COMPLETION' | 'GATE_ALWAYS' | 'NOTIFY_ONLY'
 export type TaskType = 'feature' | 'fix' | 'refactor' | 'test' | 'chore' | 'docs';
 export type DevServerMode = 'port' | 'proxy' | 'none';
 export type PoolContainerStatus = 'WARMING' | 'READY' | 'CLAIMED';
+export type WorkflowGate = 'auto' | 'manual';
+export type WorkflowStatus = 'running' | 'waiting_gate' | 'complete';
 
 export interface Task {
   id: string;
@@ -50,6 +52,10 @@ export interface Task {
   createdAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;
+  workflowName: string | null;
+  workflowStage: string | null;       // current stage id
+  workflowStatus: WorkflowStatus | null;
+  workflowSkippedStages: string[];    // stage ids skipped at spawn time
 }
 
 export interface PoolContainer {
@@ -138,6 +144,51 @@ export interface SpawnTaskInput {
   anthropicBaseUrl?: string;
   ticket?: string;
   branchName?: string;
+  workflowName?: string;
+  skippedStages?: string[];
+}
+
+// ── Workflow types ────────────────────────────────────────────────────────
+
+export interface WorkflowStageConfig {
+  id: string;
+  name: string;
+  step: string;           // filename stem in ~/.lacc-data/steps/
+  gate: WorkflowGate;
+  optional: boolean;
+  canLoop: boolean;
+  oversight?: string;     // per-stage OversightMode override
+  tools?: {
+    skills?: string[];
+    agents?: string[];
+  };
+}
+
+export interface WorkflowDefinition {
+  name: string;
+  version: number;
+  description: string;
+  docsDir: string;        // default: 'ai-docs'
+  tools?: {
+    skills?: string[];
+    agents?: string[];
+    mcp?: string[];
+  };
+  stages: WorkflowStageConfig[];
+}
+
+export interface StepDefinition {
+  name: string;
+  filename: string;       // stem, e.g. 'spec-from-jira'
+  description: string;
+  reads: string[];
+  writes: string[];
+  promptUser: boolean;
+  tools?: {
+    skills?: string[];
+    agents?: string[];
+  };
+  prompt: string;         // full prompt body (below frontmatter)
 }
 
 export interface FeedbackInput {

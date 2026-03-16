@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import type { SpawnTaskInput } from '@lacc/shared';
+import type { SpawnTaskInput, WorkflowDefinition } from '@lacc/shared';
+import { useWorkflows } from '../hooks/useWorkflows.js';
 import { generateBranchPreview } from '../utils.js';
 import { Button } from '../components/ui/Button.js';
 import { Input, Textarea } from '../components/ui/Input.js';
@@ -128,6 +129,11 @@ export function NewTaskModal({ onClose, onSubmit, repoPaths, activeRepo }: Props
   const [showHistory, setShowHistory] = useState(false);
   const [agents, setAgents] = useState<Array<{ name: string; filename: string }>>([]);
   const [skills, setSkills] = useState<Array<{ name: string; filename: string }>>([]);
+  const { workflows } = useWorkflows();
+  const [workflowName, setWorkflowName] = useState<string>('');
+  const [skippedStages, setSkippedStages] = useState<string[]>([]);
+
+  const selectedWorkflow: WorkflowDefinition | undefined = workflows.find(w => w.name === workflowName);
   const [useCustomPath, setUseCustomPath] = useState(repoPaths.length === 0 || (activeRepo !== null && !repoPaths.includes(activeRepo)));
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [devServerMode, setDevServerMode] = useState<string | null>(null);
@@ -174,6 +180,8 @@ export function NewTaskModal({ onClose, onSubmit, repoPaths, activeRepo }: Props
         agentName: agentName || undefined,
         skillNames: skillNames.length > 0 ? skillNames : undefined,
         anthropicBaseUrl: anthropicBaseUrl || undefined,
+        workflowName: workflowName || undefined,
+        skippedStages: skippedStages.length > 0 ? skippedStages : undefined,
       });
       onClose();
     } catch (err: unknown) {
@@ -207,6 +215,8 @@ export function NewTaskModal({ onClose, onSubmit, repoPaths, activeRepo }: Props
         agentName: agentName || undefined,
         skillNames: skillNames.length > 0 ? skillNames : undefined,
         anthropicBaseUrl: anthropicBaseUrl || undefined,
+        workflowName: workflowName || undefined,
+        skippedStages: skippedStages.length > 0 ? skippedStages : undefined,
       });
       onClose();
     } catch (err) {
@@ -226,6 +236,60 @@ export function NewTaskModal({ onClose, onSubmit, repoPaths, activeRepo }: Props
     <ModalOverlay onClose={onClose} className="!max-w-[90vw]">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <h2 style={{ color: 'var(--text-bright)', fontSize: 14, fontWeight: 600 }}>New Task</h2>
+
+        {/* Workflow selector (shown when workflows exist) */}
+        {workflows.length > 0 && (
+          <div>
+            <label className={labelCls}>Workflow</label>
+            <div className="flex gap-2 items-start">
+              <div className="flex-1">
+                <CustomSelect
+                  value={workflowName}
+                  onChange={v => { setWorkflowName(v); setSkippedStages([]); }}
+                  options={[
+                    { value: '', label: 'None' },
+                    ...workflows.map(w => ({ value: w.name, label: `${w.name} · ${w.stages.length} stages` })),
+                  ]}
+                />
+              </div>
+            </div>
+
+            {selectedWorkflow && (
+              <div className="mt-2 flex flex-col gap-1">
+                {selectedWorkflow.stages.map(stage => (
+                  <label
+                    key={stage.id}
+                    className="flex items-center gap-2 cursor-pointer text-sm"
+                    style={{ color: 'var(--text-muted)', padding: '2px 0' }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-green-500"
+                      checked={!skippedStages.includes(stage.id)}
+                      disabled={!stage.optional}
+                      onChange={() => {
+                        setSkippedStages(prev =>
+                          prev.includes(stage.id)
+                            ? prev.filter(s => s !== stage.id)
+                            : [...prev, stage.id]
+                        );
+                      }}
+                    />
+                    <span style={{ color: skippedStages.includes(stage.id) ? 'var(--text-ghost)' : 'var(--text-body)' }}>
+                      {stage.name}
+                    </span>
+                    {!stage.optional && (
+                      <span style={{ fontSize: 11, color: 'var(--text-ghost)' }}>(required)</span>
+                    )}
+                    <span style={{ fontSize: 11, color: 'var(--text-ghost)', marginLeft: 'auto' }}>
+                      {stage.gate === 'manual' ? 'manual gate' : 'auto'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Repo path */}
         <div>
@@ -303,8 +367,8 @@ export function NewTaskModal({ onClose, onSubmit, repoPaths, activeRepo }: Props
             className="min-h-[80px]"
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
-            placeholder="Describe what you want the agent to do..."
-            required
+            required={!workflowName}
+            placeholder={workflowName ? "Optional: extra context appended to first stage prompt..." : "Describe what you want the agent to do..."}
             onKeyDown={e => { if (e.key === 'ArrowUp' && !prompt) setShowHistory(true); }}
           />
           {showHistory && prompts.length > 0 && (

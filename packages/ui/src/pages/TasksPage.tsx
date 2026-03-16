@@ -123,6 +123,15 @@ export function TasksPage({
         onMemory={openMemory}
         onCommit={openCommit}
         onMerge={openMerge}
+        onWorkflowContinue={async (taskId) => {
+          await fetch(`/tasks/${taskId}/stage/continue`, { method: 'POST' });
+        }}
+        onWorkflowSkip={async (taskId) => {
+          await fetch(`/tasks/${taskId}/stage/skip`, { method: 'POST' });
+        }}
+        onWorkflowRerun={async (taskId) => {
+          await fetch(`/tasks/${taskId}/stage/rerun`, { method: 'POST' });
+        }}
       />
     </div>
   );

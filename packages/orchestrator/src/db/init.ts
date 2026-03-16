@@ -139,6 +139,26 @@ function runMigrations() {
     db.exec("UPDATE tasks SET status = 'READY' WHERE status = 'AWAITING_REVIEW'");
     db.pragma('user_version = 2');
   }
+
+  if (version < 3) {
+    const taskColumns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+    const colNames = taskColumns.map(c => c.name);
+
+    const migrations: [string, string][] = [
+      ['workflow_name',            'ALTER TABLE tasks ADD COLUMN workflow_name TEXT'],
+      ['workflow_stage',           'ALTER TABLE tasks ADD COLUMN workflow_stage TEXT'],
+      ['workflow_status',          'ALTER TABLE tasks ADD COLUMN workflow_status TEXT'],
+      ['workflow_skipped_stages',  "ALTER TABLE tasks ADD COLUMN workflow_skipped_stages TEXT NOT NULL DEFAULT '[]'"],
+    ];
+
+    for (const [col, sql] of migrations) {
+      if (!colNames.includes(col)) {
+        db.exec(sql);
+      }
+    }
+
+    db.pragma('user_version = 3');
+  }
 }
 
 export { DATA_DIR, DB_PATH };

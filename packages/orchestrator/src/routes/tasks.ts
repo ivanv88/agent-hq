@@ -10,7 +10,7 @@ import { getGlobalConfig } from '../config/global.js';
 import { loadRepoConfig, mergeConfigs } from '../config/repo.js';
 import { readDevcontainerConfig } from '../containers/devcontainer.js';
 import { assignPort, releasePort, reclaimPort } from '../containers/ports.js';
-import { claim, configure, startClaude, watchExecUntilDone, runPostCreate, killContainer, killImmediate, killTaskContainerIfExists, pauseContainer, resumeContainer, resumeClaudeAfterRateLimit } from '../containers/lifecycle.js';
+import { claim, configure, watchExecUntilDone, runPostCreate, killContainer, killImmediate, killTaskContainerIfExists, pauseContainer, resumeContainer, resumeClaudeAfterRateLimit } from '../containers/lifecycle.js';
 import { createWorktree, generateBranchName, isGitRepo } from '../git/worktree.js';
 import { startLogPipe, preloadFromDb, getRingBuffer, hasActiveStream, logEmitter, RING_SIZE } from '../streaming/logs.js';
 import { startCostParser } from '../streaming/cost.js';
@@ -19,6 +19,7 @@ import { startRateLimitWatcher, stopRateLimitWatcher } from '../streaming/rateli
 import { startCompletionDetector } from '../streaming/completion.js';
 import { startDevServerDetector } from '../streaming/devserver.js';
 import { maintain } from '../containers/lifecycle.js';
+import { launchClaude } from '../workers/agent.js';
 import { getPoolStatus } from '../db/pool.js';
 
 export function registerTaskRoutes(fastify: FastifyInstance) {
@@ -107,6 +108,10 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       createdAt: new Date(),
       startedAt: null,
       completedAt: null,
+      workflowName: input.workflowName ?? null,
+      workflowStage: null,
+      workflowStatus: input.workflowName ? 'running' : null,
+      workflowSkippedStages: input.skippedStages ?? [],
     };
 
     insertTask(task);
@@ -475,6 +480,85 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
 
     return { ok: true };
   });
+
+  // ── Stage control endpoints ───────────────────────────────────────────────
+
+  // Continue past a manual gate (workflow_status = waiting_gate)
+  fastify.post<{ Params: { id: string }; Body: { extraContext?: string } }>('/tasks/:id/stage/continue', async (req, reply) => {
+    const task = getTask(req.params.id);
+    if (!task) return reply.status(404).send({ error: 'Task not found' });
+    if (task.workflowStatus !== 'waiting_gate') {
+      return reply.status(400).send({ error: 'Task is not at a manual gate' });
+    }
+    if (!task.workflowName || !task.workflowStage) {
+      return reply.status(400).send({ error: 'Task has no active workflow stage' });
+    }
+
+    const { getWorkflow } = await import('../db/workflows.js');
+    const { startStage } = await import('../workers/workflow.js');
+    const wf = getWorkflow(task.workflowName);
+    if (!wf) return reply.status(404).send({ error: `Workflow '${task.workflowName}' not found` });
+
+    const stage = wf.stages.find(s => s.id === task.workflowStage);
+    if (!stage) return reply.status(404).send({ error: `Stage '${task.workflowStage}' not found in workflow` });
+
+    await startStage(task, stage, wf, req.body?.extraContext);
+    return { ok: true };
+  });
+
+  // Skip current stage, advance to next
+  fastify.post<{ Params: { id: string } }>('/tasks/:id/stage/skip', async (req, reply) => {
+    const task = getTask(req.params.id);
+    if (!task) return reply.status(404).send({ error: 'Task not found' });
+    if (!task.workflowName || !task.workflowStage) {
+      return reply.status(400).send({ error: 'Task has no active workflow' });
+    }
+
+    const { getWorkflow } = await import('../db/workflows.js');
+    const { startStage } = await import('../workers/workflow.js');
+    const wf = getWorkflow(task.workflowName);
+    if (!wf) return reply.status(404).send({ error: `Workflow not found` });
+
+    const skipped = [...(task.workflowSkippedStages ?? []), task.workflowStage];
+    updateTask(task.id, { workflowSkippedStages: skipped });
+
+    const currentTask = getTask(task.id)!;
+    const remaining = wf.stages.filter(s => !skipped.includes(s.id));
+    const afterCurrent = remaining.filter(s => {
+      const allIds = wf.stages.map(x => x.id);
+      return allIds.indexOf(s.id) > allIds.indexOf(task.workflowStage!);
+    });
+
+    if (!afterCurrent.length) {
+      // No more stages
+      updateTask(task.id, { workflowStatus: 'complete', status: 'READY', completedAt: new Date() });
+      broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
+      return { ok: true };
+    }
+
+    await startStage(currentTask, afterCurrent[0], wf);
+    return { ok: true };
+  });
+
+  // Re-run current stage from scratch
+  fastify.post<{ Params: { id: string } }>('/tasks/:id/stage/rerun', async (req, reply) => {
+    const task = getTask(req.params.id);
+    if (!task) return reply.status(404).send({ error: 'Task not found' });
+    if (!task.workflowName || !task.workflowStage) {
+      return reply.status(400).send({ error: 'Task has no active workflow' });
+    }
+
+    const { getWorkflow } = await import('../db/workflows.js');
+    const { startStage } = await import('../workers/workflow.js');
+    const wf = getWorkflow(task.workflowName);
+    if (!wf) return reply.status(404).send({ error: `Workflow not found` });
+
+    const stage = wf.stages.find(s => s.id === task.workflowStage);
+    if (!stage) return reply.status(404).send({ error: `Stage not found` });
+
+    await startStage(task, stage, wf);
+    return { ok: true };
+  });
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -502,7 +586,7 @@ function extractAssistantText(chunks: string[]): string[] {
 }
 
 async function spawnTask(
-  fastify: { log: { error: (err: unknown, msg: string) => void; info: (msg: string) => void } },
+  fastify: { log: { error: (err: unknown, msg: string) => void; info: (msg: string) => void; warn: (msg: string) => void } },
   task: Task,
   devcontainerConfig: import('@lacc/shared').DevcontainerConfig | null,
   merged: import('../config/repo.js').MergedConfig,
@@ -553,24 +637,33 @@ async function spawnTask(
   const config = getGlobalConfig();
   maintain(config.poolSize).catch(err => fastify.log.error(err, 'Maintain pool error'));
 
+  // 5.5 If a workflow is configured, resolve the first stage prompt and inject it.
+  const taskAfterSetup = getTask(taskId)!;
+  if (taskAfterSetup.workflowName) {
+    const { getWorkflow, getStep } = await import('../db/workflows.js');
+    const { resolveTemplateVars } = await import('../workers/workflow.js');
+    const wf = getWorkflow(taskAfterSetup.workflowName);
+    if (wf) {
+      const skipped = taskAfterSetup.workflowSkippedStages ?? [];
+      const firstStage = wf.stages.find(s => !skipped.includes(s.id));
+      if (firstStage) {
+        const step = getStep(firstStage.step);
+        if (step) {
+          const stagePrompt = resolveTemplateVars(step.prompt, taskAfterSetup, wf);
+          const userContext = task.prompt?.trim();
+          const combinedPrompt = userContext
+            ? `${stagePrompt}\n\n---\nAdditional context from user:\n${userContext}`
+            : stagePrompt;
+          updateTask(taskId, {
+            prompt: combinedPrompt,
+            workflowStage: firstStage.id,
+            workflowStatus: 'running',
+          });
+        }
+      }
+    }
+  }
+
   // 6. Launch Claude and wire monitors
   await launchClaude(taskId, containerId, worktreePath);
-}
-
-// Launch Claude in an already-configured container and wire all monitors.
-// Called by spawnTask (fresh container) and by the feedback handler (reuse existing container).
-async function launchClaude(taskId: string, containerId: string, worktreePath: string): Promise<void> {
-  updateTask(taskId, { status: 'WORKING', startedAt: new Date() });
-  broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(taskId)! });
-
-  const task = getTask(taskId)!;
-  const { stream, exec } = await startClaude(containerId, task);
-
-  startLogPipe(taskId, stream);
-  watchExecUntilDone(exec, taskId).catch(() => {});
-  startCostParser(taskId);
-  startSpinDetector(taskId, worktreePath);
-  startRateLimitWatcher(taskId, containerId);
-  startCompletionDetector(taskId);
-  startDevServerDetector(taskId, task.devPort);
 }

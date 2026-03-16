@@ -16,14 +16,34 @@ interface Props {
   onMemory: () => void;
   onCommit: () => void;
   onMerge: () => void;
+  onWorkflowContinue?: () => void;
+  onWorkflowSkip?: () => void;
+  onWorkflowRerun?: () => void;
 }
 
 export function ActionBar({
   task, onComplete, onDiscard, onFeedback,
-  onOpenEditor, onOpenBrowser, onKill, onPause, onResume, onRestart, onMemory, onCommit, onMerge
+  onOpenEditor, onOpenBrowser, onKill, onPause, onResume, onRestart, onMemory, onCommit, onMerge,
+  onWorkflowContinue, onWorkflowSkip, onWorkflowRerun
 }: Props) {
 
   if (task.status === 'READY') {
+    // Workflow gate — show stage controls instead of review actions
+    if (task.workflowName && task.workflowStatus === 'waiting_gate') {
+      return (
+        <div style={{ padding: '10px 20px', borderTop: '1px solid #2a1a08', background: '#0a0804',
+            display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          <span style={{ color: '#4a3020', fontSize: 13 }}>
+            Stage complete · manual gate
+          </span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <Button variant="ghost" size="sm" onClick={onWorkflowRerun}>Re-run Stage</Button>
+            <Button variant="ghost" size="sm" onClick={onWorkflowSkip}>Skip</Button>
+            <Button variant="success" size="sm" onClick={onWorkflowContinue}>Continue →</Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div
         style={{

@@ -4,6 +4,9 @@ import { Input } from '../components/ui/Input.js';
 import { Tabs } from '../components/ui/Tabs.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import type { MetaMessage } from '@lacc/shared';
+import { WorkflowEditor } from '../components/WorkflowEditor.js';
+import { StepEditor } from '../components/StepEditor.js';
+import type { WorkflowDefinition, StepDefinition } from '@lacc/shared';
 
 interface SkillOrAgent {
   name: string;
@@ -11,11 +14,13 @@ interface SkillOrAgent {
   content: string;
 }
 
-type TabId = 'library' | 'workbench';
+type TabId = 'library' | 'workbench' | 'workflows' | 'steps';
 
 const TABS = [
   { id: 'library', label: 'Library' },
   { id: 'workbench', label: 'Workbench' },
+  { id: 'workflows', label: 'Workflows' },
+  { id: 'steps', label: 'Steps' },
 ];
 
 export function LibraryPage() {
@@ -43,6 +48,8 @@ export function LibraryPage() {
         {tab === 'workbench' && (
           <WorkbenchTab onAfterSend={() => setLibraryRefreshKey(k => k + 1)} />
         )}
+        {tab === 'workflows' && <WorkflowsTab />}
+        {tab === 'steps' && <StepsTab />}
       </div>
     </div>
   );
@@ -290,6 +297,138 @@ function WorkbenchTab({ onAfterSend }: { onAfterSend?: () => void }) {
           Send ↵
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ─── Workflows Tab ──────────────────────────────────────────────────────────
+
+function WorkflowsTab() {
+  const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
+  const [steps, setSteps] = useState<StepDefinition[]>([]);
+  const [selected, setSelected] = useState<WorkflowDefinition | null | 'new'>(null);
+
+  const load = () => {
+    Promise.all([
+      fetch('/workflows').then(r => r.json()),
+      fetch('/steps').then(r => r.json()),
+    ]).then(([wfs, sts]) => {
+      setWorkflows(wfs as WorkflowDefinition[]);
+      setSteps(sts as StepDefinition[]);
+    }).catch(console.error);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  if (selected !== null) {
+    return (
+      <WorkflowEditor
+        workflow={selected === 'new' ? null : selected}
+        steps={steps}
+        onSave={async (wf) => {
+          const isNew = selected === 'new';
+          await fetch(isNew ? '/workflows' : `/workflows/${wf.name}`, {
+            method: isNew ? 'POST' : 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(wf),
+          });
+          load();
+          setSelected(null);
+        }}
+        onDelete={async (name) => {
+          await fetch(`/workflows/${name}`, { method: 'DELETE' });
+          load();
+          setSelected(null);
+        }}
+        onCancel={() => setSelected(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 py-4">
+      <div className="flex items-center justify-between">
+        <span className="text-text-ghost text-xs uppercase tracking-widest">Workflows</span>
+        <Button variant="ghost" size="sm" onClick={() => setSelected('new')}>+ New</Button>
+      </div>
+      {workflows.length === 0 && (
+        <div className="text-text-ghost text-sm text-center py-8">
+          No workflows yet. Click + New to create one.
+        </div>
+      )}
+      {workflows.map(wf => (
+        <div
+          key={wf.name}
+          className="flex items-center gap-3 px-3 py-2.5 rounded border border-border-default cursor-pointer hover:bg-surface-inset transition-colors duration-100"
+          onClick={() => setSelected(wf)}
+        >
+          <span className="text-text-body text-sm flex-1">{wf.name}</span>
+          <span className="text-text-ghost text-xs">{wf.stages.length} stages</span>
+          <span className="text-text-ghost text-xs">{wf.description}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Steps Tab ───────────────────────────────────────────────────────────────
+
+function StepsTab() {
+  const [steps, setSteps] = useState<StepDefinition[]>([]);
+  const [selected, setSelected] = useState<StepDefinition | null | 'new'>(null);
+
+  const load = () => {
+    fetch('/steps').then(r => r.json()).then(setSteps).catch(console.error);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  if (selected !== null) {
+    return (
+      <StepEditor
+        step={selected === 'new' ? null : selected}
+        onSave={async (step) => {
+          const isNew = selected === 'new';
+          await fetch(isNew ? '/steps' : `/steps/${step.filename}`, {
+            method: isNew ? 'POST' : 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(step),
+          });
+          load();
+          setSelected(null);
+        }}
+        onDelete={async (name) => {
+          await fetch(`/steps/${name}`, { method: 'DELETE' });
+          load();
+          setSelected(null);
+        }}
+        onCancel={() => setSelected(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 py-4">
+      <div className="flex items-center justify-between">
+        <span className="text-text-ghost text-xs uppercase tracking-widest">Steps</span>
+        <Button variant="ghost" size="sm" onClick={() => setSelected('new')}>+ New</Button>
+      </div>
+      {steps.length === 0 && (
+        <div className="text-text-ghost text-sm text-center py-8">
+          No steps yet. Click + New to create one.
+        </div>
+      )}
+      {steps.map(step => (
+        <div
+          key={step.filename}
+          className="flex items-center gap-3 px-3 py-2.5 rounded border border-border-default cursor-pointer hover:bg-surface-inset transition-colors duration-100"
+          onClick={() => setSelected(step)}
+        >
+          <span className="text-text-body text-sm flex-1">{step.name}</span>
+          <span className="text-text-ghost text-xs font-mono">{step.filename}</span>
+          <span className="text-text-ghost text-xs">{step.description}</span>
+        </div>
+      ))}
     </div>
   );
 }

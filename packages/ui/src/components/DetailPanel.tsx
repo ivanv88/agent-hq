@@ -1,11 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Task } from '@lacc/shared';
 import { Terminal } from './Terminal.js';
 import { DiffView } from './DiffView.js';
 import { ActionBar } from './ActionBar.js';
 import { Tabs, TabBadge, type Tab } from './ui/Tabs.js';
+import { WorkflowTab } from './WorkflowTab.js';
 
-type TabId = 'terminal' | 'diff' | 'preview';
+type TabId = 'terminal' | 'diff' | 'preview' | 'workflow';
 
 interface Props {
   task: Task | null;
@@ -20,11 +21,15 @@ interface Props {
   onMemory: (task: Task) => void;
   onCommit: (task: Task) => void;
   onMerge: (task: Task) => void;
+  onWorkflowContinue: (taskId: string) => void;
+  onWorkflowSkip: (taskId: string) => void;
+  onWorkflowRerun: (taskId: string) => void;
 }
 
 export function DetailPanel({
   task, onComplete, onDiscard, onFeedback,
-  onOpenEditor, onKill, onPause, onResume, onRestart, onMemory, onCommit, onMerge
+  onOpenEditor, onKill, onPause, onResume, onRestart, onMemory, onCommit, onMerge,
+  onWorkflowContinue, onWorkflowSkip, onWorkflowRerun
 }: Props) {
   const [tab, setTab] = useState<TabId>('terminal');
 
@@ -43,8 +48,21 @@ export function DetailPanel({
     if (showPreview) {
       result.push({ id: 'preview', label: 'preview' });
     }
+    if (task?.workflowName) {
+      result.splice(1, 0, {   // insert after terminal
+        id: 'workflow',
+        label: 'workflow',
+        badge: task.workflowStatus === 'waiting_gate'
+          ? <TabBadge variant="warning">gate</TabBadge>
+          : undefined,
+      });
+    }
     return result;
-  }, [showDiff, showPreview, task?.status]);
+  }, [showDiff, showPreview, task?.status, task?.workflowName, task?.workflowStatus]);
+
+  useEffect(() => {
+    if (task?.workflowStatus === 'waiting_gate') setTab('workflow');
+  }, [task?.workflowStatus]);
 
   if (!task) {
     return (
@@ -117,6 +135,14 @@ export function DetailPanel({
         {tab === 'diff' && showDiff && (
           <DiffView key={task.id} taskId={task.id} active={tab === 'diff'} />
         )}
+        {tab === 'workflow' && task?.workflowName && (
+          <WorkflowTab
+            task={task}
+            onContinue={onWorkflowContinue}
+            onSkipStage={onWorkflowSkip}
+            onRerunStage={onWorkflowRerun}
+          />
+        )}
         {tab === 'preview' && showPreview && (
           <div className="flex flex-col h-full">
             <div className="text-[12px] text-[var(--text-muted)] px-3 py-1 shrink-0">
@@ -148,6 +174,9 @@ export function DetailPanel({
         onMemory={() => onMemory(task)}
         onCommit={() => onCommit(task)}
         onMerge={() => onMerge(task)}
+        onWorkflowContinue={() => onWorkflowContinue(task.id)}
+        onWorkflowSkip={() => onWorkflowSkip(task.id)}
+        onWorkflowRerun={() => onWorkflowRerun(task.id)}
       />
     </div>
   );

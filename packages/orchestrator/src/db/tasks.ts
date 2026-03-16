@@ -1,5 +1,5 @@
 import { getDb } from './init.js';
-import type { Task, TaskStatus } from '@lacc/shared';
+import type { Task, TaskStatus, WorkflowStatus } from '@lacc/shared';
 
 function rowToTask(row: Record<string, unknown>): Task {
   return {
@@ -38,6 +38,10 @@ function rowToTask(row: Record<string, unknown>): Task {
     createdAt: new Date(row.created_at as number),
     startedAt: row.started_at ? new Date(row.started_at as number) : null,
     completedAt: row.completed_at ? new Date(row.completed_at as number) : null,
+    workflowName: (row.workflow_name as string | null) ?? null,
+    workflowStage: (row.workflow_stage as string | null) ?? null,
+    workflowStatus: (row.workflow_status as WorkflowStatus | null) ?? null,
+    workflowSkippedStages: JSON.parse((row.workflow_skipped_stages as string) ?? '[]'),
   };
 }
 
@@ -50,14 +54,16 @@ export function insertTask(task: Task): void {
       model, agent_name, skill_names, plan_first, max_retries, retry_count,
       cost_usd, input_tokens, output_tokens, context_tokens_used, last_file_changed,
       rate_limit_retry_after, flagged_for_delete, flagged_for_delete_at,
-      pr_title, pr_body, failure_reason, created_at, started_at, completed_at
+      pr_title, pr_body, failure_reason, created_at, started_at, completed_at,
+      workflow_name, workflow_stage, workflow_status, workflow_skipped_stages
     ) VALUES (
       @id, @repoPath, @prompt, @branchName, @baseBranch, @worktreePath, @containerId,
       @status, @oversightMode, @taskType, @devServerMode, @devPort, @devServerUrl,
       @model, @agentName, @skillNames, @planFirst, @maxRetries, @retryCount,
       @costUsd, @inputTokens, @outputTokens, @contextTokensUsed, @lastFileChanged,
       @rateLimitRetryAfter, @flaggedForDelete, @flaggedForDeleteAt,
-      @prTitle, @prBody, @failureReason, @createdAt, @startedAt, @completedAt
+      @prTitle, @prBody, @failureReason, @createdAt, @startedAt, @completedAt,
+      @workflowName, @workflowStage, @workflowStatus, @workflowSkippedStages
     )
   `).run({
     id: task.id,
@@ -93,6 +99,10 @@ export function insertTask(task: Task): void {
     createdAt: task.createdAt.getTime(),
     startedAt: task.startedAt?.getTime() ?? null,
     completedAt: task.completedAt?.getTime() ?? null,
+    workflowName: task.workflowName ?? null,
+    workflowStage: task.workflowStage ?? null,
+    workflowStatus: task.workflowStatus ?? null,
+    workflowSkippedStages: JSON.stringify(task.workflowSkippedStages ?? []),
   });
 }
 
@@ -134,6 +144,10 @@ export function updateTask(id: string, patch: Partial<Task>): void {
     createdAt: 'created_at',
     startedAt: 'started_at',
     completedAt: 'completed_at',
+    workflowName: 'workflow_name',
+    workflowStage: 'workflow_stage',
+    workflowStatus: 'workflow_status',
+    workflowSkippedStages: 'workflow_skipped_stages',
     id: 'id',
   };
 
@@ -142,7 +156,7 @@ export function updateTask(id: string, patch: Partial<Task>): void {
     const val = patch[key];
     sets.push(`${col} = @${key}`);
 
-    if (key === 'skillNames') {
+    if (key === 'skillNames' || key === 'workflowSkippedStages') {
       params[key] = JSON.stringify(val);
     } else if (key === 'planFirst' || key === 'flaggedForDelete') {
       params[key] = val ? 1 : 0;

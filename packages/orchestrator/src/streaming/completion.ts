@@ -80,6 +80,17 @@ async function handleCompletion(taskId: string, outcome: string | 'end', failure
     return;
   }
 
+  // ── Workflow stage advancement ──────────────────────────────────────────
+  // If task has a workflow, try to advance to the next stage.
+  // Returns false if it handled the transition (next stage or waiting_gate).
+  // Returns true if this was the final stage → fall through to normal READY/DONE.
+  if (task.workflowName) {
+    const { advanceWorkflowStage } = await import('../workers/workflow.js');
+    const shouldContinue = await advanceWorkflowStage(taskId);
+    if (!shouldContinue) return; // workflow worker took over
+  }
+  // ── End workflow advancement ────────────────────────────────────────────
+
   if (task.oversightMode === 'GATE_ON_COMPLETION' || task.oversightMode === 'GATE_ALWAYS') {
     // → READY: keep container alive so dev server stays accessible, hold the port
     updateTask(taskId, { status: 'READY', completedAt: now });
