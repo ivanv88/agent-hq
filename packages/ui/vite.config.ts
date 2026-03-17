@@ -25,6 +25,8 @@ export default defineConfig({
       '/config': { target: 'http://127.0.0.1:7842', changeOrigin: true },
       '/prompts': { target: 'http://127.0.0.1:7842', changeOrigin: true },
       '/meta': { target: 'http://127.0.0.1:7842', changeOrigin: true },
+      '/workflows': { target: 'http://127.0.0.1:7842', changeOrigin: true },
+      '/steps': { target: 'http://127.0.0.1:7842', changeOrigin: true },
       '/health': { target: 'http://127.0.0.1:7842', changeOrigin: true },
       '/session': { target: 'http://127.0.0.1:7842', changeOrigin: true },
       '/fs': { target: 'http://127.0.0.1:7842', changeOrigin: true },

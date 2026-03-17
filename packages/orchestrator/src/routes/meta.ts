@@ -42,12 +42,14 @@ async function runMetaClaude(message: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const args = [
       '-p',
+      '--output-format', 'text',
       '--model', config.metaModel,
       message,
     ];
 
     const child = spawn('claude', args, {
       cwd: claudeHome,
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
         ...(config.anthropicApiKey ? { ANTHROPIC_API_KEY: config.anthropicApiKey } : {}),
