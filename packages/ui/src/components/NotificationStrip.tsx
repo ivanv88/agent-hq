@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { Notification } from '@lacc/shared';
+import { X } from 'lucide-react';
+import { Button } from './ui/Button.js';
 
 interface NotifEntry {
   id: number;
   notification: Notification;
-  at: number;
 }
 
 let _id = 0;
@@ -20,10 +21,9 @@ export function NotificationStrip({ newNotification, onSelectTask }: Props) {
   useEffect(() => {
     if (!newNotification) return;
 
-    const entry: NotifEntry = { id: _id++, notification: newNotification, at: Date.now() };
-    setEntries(prev => [entry, ...prev].slice(0, 20));
+    const entry: NotifEntry = { id: _id++, notification: newNotification };
+    setEntries(prev => [entry, ...prev].slice(0, 10));
 
-    // Auto-fade after 60s
     const timeout = setTimeout(() => {
       setEntries(prev => prev.filter(e => e.id !== entry.id));
     }, 60_000);
@@ -33,82 +33,57 @@ export function NotificationStrip({ newNotification, onSelectTask }: Props) {
 
   if (entries.length === 0) return null;
 
-  const dotColor = (level: Notification['level']) =>
-    level === 'error' ? '#f87171' :
-    level === 'warning' ? '#fb923c' :
-    '#4ade80';
+  return (
+    <div className="fixed bottom-4 z-50 flex flex-col gap-2 items-start" style={{ left: 56 }}>
+      {[...entries].reverse().map((e, index) => (
+        <NotifCard
+          key={e.id}
+          entry={e}
+          index={index}
+          onSelect={() => {
+            if (e.notification.taskId) onSelectTask(e.notification.taskId);
+            setEntries(prev => prev.filter(en => en.id !== e.id));
+          }}
+          onDismiss={() => setEntries(prev => prev.filter(en => en.id !== e.id))}
+        />
+      ))}
+    </div>
+  );
+}
+
+function dotColorClass(level: Notification['level']) {
+  if (level === 'error')   return 'bg-status-failed';
+  if (level === 'warning') return 'bg-status-spinning';
+  return 'bg-status-working';
+}
+
+function NotifCard({ entry, index, onSelect, onDismiss }: {
+  entry: NotifEntry;
+  index: number;
+  onSelect: () => void;
+  onDismiss: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50"
-      style={{ background: '#05050e', borderTop: '1px solid #13131f', minHeight: 32 }}
+      className="animate-slide-in w-80 px-3 py-2 rounded border border-border-default bg-surface-raised hover:bg-surface-overlay cursor-pointer transition-colors duration-100 group"
+      style={{ animationDelay: `${index * 0.05}s` }}
+      onClick={() => setExpanded(e => !e)}
     >
-      <div className="flex items-stretch overflow-x-auto" style={{ height: '100%' }}>
-        {entries.map((e, index) => (
-          <div
-            key={e.id}
-            className="animate-fade-up"
-            onClick={() => {
-              if (e.notification.taskId) onSelectTask(e.notification.taskId);
-              setEntries(prev => prev.filter(en => en.id !== e.id));
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '6px 14px',
-              borderRight: '1px solid #1e1e30',
-              cursor: 'pointer',
-              flex: 1,
-              minWidth: 0,
-              animationDelay: `${index * 0.06}s`,
-            }}
-            onMouseEnter={el => (el.currentTarget.style.background = '#1e1e30')}
-            onMouseLeave={el => (el.currentTarget.style.background = 'transparent')}
-          >
-            <div
-              style={{
-                width: 5,
-                height: 5,
-                borderRadius: '50%',
-                background: dotColor(e.notification.level),
-                flexShrink: 0,
-              }}
-            />
-            <span
-              style={{
-                color: '#606080',
-                fontSize: 12,
-                flex: 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {e.notification.message}
-            </span>
-            <button
-              onClick={ev => {
-                ev.stopPropagation();
-                setEntries(prev => prev.filter(en => en.id !== e.id));
-              }}
-              style={{
-                color: '#2a2a40',
-                background: 'transparent',
-                border: 'none',
-                fontSize: 13,
-                cursor: 'pointer',
-                lineHeight: 1,
-                flexShrink: 0,
-                padding: '0 2px',
-              }}
-              onMouseEnter={ev => (ev.currentTarget.style.color = '#888')}
-              onMouseLeave={ev => (ev.currentTarget.style.color = '#2a2a40')}
-            >
-              ×
-            </button>
-          </div>
-        ))}
+      <div className="flex items-start gap-2">
+        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-[3px] ${dotColorClass(entry.notification.level)}`} />
+        <span className={`text-text-muted text-[11px] flex-1 ${expanded ? 'whitespace-normal break-words' : 'truncate'}`}>
+          {entry.notification.message}
+        </span>
+        <Button
+          variant="icon"
+          onClick={ev => { ev.stopPropagation(); onDismiss(); }}
+          className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-100"
+          style={{ width: 20, height: 20, padding: 2 }}
+        >
+          <X size={12} />
+        </Button>
       </div>
     </div>
   );
