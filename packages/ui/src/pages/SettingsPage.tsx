@@ -105,6 +105,23 @@ export function SettingsPage({ config: serverConfig, configLoading, onSave }: Pr
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    label="Session token limit (0 = unlimited)"
+                    type="number"
+                    value={draft.sessionTokenLimit}
+                    onChange={e => setDraft(c => c ? { ...c, sessionTokenLimit: Number(e.target.value) } : c)}
+                    hint="Used for session usage % in the top bar (subscription plans)"
+                  />
+                  <FormField
+                    label="Weekly token limit (0 = unlimited)"
+                    type="number"
+                    value={draft.weeklyTokenLimit}
+                    onChange={e => setDraft(c => c ? { ...c, weeklyTokenLimit: Number(e.target.value) } : c)}
+                    hint="Used for weekly usage % in the top bar (subscription plans)"
+                  />
+                </div>
+
                 <FormField
                   label="Anthropic Base URL (global override)"
                   value={draft.anthropicBaseUrl ?? ''}

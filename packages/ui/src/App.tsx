@@ -41,7 +41,7 @@ function AppShell() {
   const [lastNotification, setLastNotification] = useState<Notification | null>(null);
 
   const { repoPaths, activeRepo, setActiveRepo, addRepo, removeRepo } = useRepoPaths();
-  const sessionCost = useSessionCost(lastEvent);
+  const sessionUsage = useSessionCost(lastEvent);
   const {
     modal, modalTask,
     openNew, openFeedback, openMemory, openCommit, openMerge, openMergeComplete, openGitInit,
@@ -117,15 +117,25 @@ function AppShell() {
     <div className="flex flex-col h-screen">
       <TopBar
         pool={pool}
-        sessionCost={sessionCost}
+        sessionCost={sessionUsage.costUsd}
+        sessionTokens={sessionUsage.sessionTokens}
+        weeklyTokens={sessionUsage.weeklyTokens}
+        sessionTokenLimit={sessionUsage.sessionTokenLimit}
+        weeklyTokenLimit={sessionUsage.weeklyTokenLimit}
+        hasApiKey={config?.hasApiKey ?? false}
         repoPaths={repoPaths}
         activeRepo={activeRepo}
         onRepoSelect={setActiveRepo}
         onAddRepo={addRepo}
         onRemoveRepo={removeRepo}
         onNew={openNew}
-
-        rateLimitRetryAfter={null}
+        rateLimitRetryAfter={
+          tasks
+            .filter(t => t.status === 'RATE_LIMITED' && t.rateLimitRetryAfter != null)
+            .reduce<number | null>((min, t) =>
+              min === null || t.rateLimitRetryAfter! < min ? t.rateLimitRetryAfter! : min
+            , null)
+        }
       />
 
       <div className="flex flex-1 min-h-0">

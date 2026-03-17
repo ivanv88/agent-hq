@@ -39,4 +39,6 @@ export const ConfigPatchSchema = z.object({
   metaModel: z.string().optional(),
   repoPaths: z.array(z.string()).optional(),
   autoResumeRateLimited: z.boolean().optional(),
+  sessionTokenLimit: z.number().int().min(0).optional(),
+  weeklyTokenLimit: z.number().int().min(0).optional(),
 });

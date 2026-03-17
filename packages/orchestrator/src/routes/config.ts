@@ -15,7 +15,8 @@ const isMarkdownOrText = (f: string) => f.endsWith('.md') || f.endsWith('.txt');
 
 export function registerConfigRoutes(fastify: FastifyInstance) {
   fastify.get('/config', async () => {
-    return getGlobalConfig();
+    const cfg = getGlobalConfig();
+    return { ...cfg, hasApiKey: cfg.anthropicApiKey.length > 0 };
   });
 
   fastify.patch('/config', async (req, reply) => {
@@ -101,9 +102,23 @@ export function registerConfigRoutes(fastify: FastifyInstance) {
   fastify.get('/session/cost', async () => {
     const { getDb } = await import('../db/init.js');
     const db = getDb();
-    const row = db.prepare(
-      'SELECT SUM(cost_usd) as total FROM tasks WHERE created_at > ?'
-    ).get(Date.now() - 24 * 60 * 60 * 1000) as { total: number | null };
-    return { totalCostUsd: row.total ?? 0 };
+    const now = Date.now();
+
+    const sessionRow = db.prepare(
+      'SELECT SUM(cost_usd) as total, SUM(input_tokens) as inputTokens, SUM(output_tokens) as outputTokens FROM tasks WHERE created_at > ?'
+    ).get(now - 24 * 60 * 60 * 1000) as { total: number | null; inputTokens: number | null; outputTokens: number | null };
+
+    const weekRow = db.prepare(
+      'SELECT SUM(input_tokens) as inputTokens, SUM(output_tokens) as outputTokens FROM tasks WHERE created_at > ?'
+    ).get(now - 7 * 24 * 60 * 60 * 1000) as { inputTokens: number | null; outputTokens: number | null };
+
+    const cfg = getGlobalConfig();
+    return {
+      totalCostUsd: sessionRow.total ?? 0,
+      sessionTokens: (sessionRow.inputTokens ?? 0) + (sessionRow.outputTokens ?? 0),
+      weeklyTokens: (weekRow.inputTokens ?? 0) + (weekRow.outputTokens ?? 0),
+      sessionTokenLimit: cfg.sessionTokenLimit,
+      weeklyTokenLimit: cfg.weeklyTokenLimit,
+    };
   });
 }

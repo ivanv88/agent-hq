@@ -18,6 +18,8 @@ export interface GlobalConfig {
   repoPaths: string[];
   autoResumeRateLimited: boolean;
   dockerProvider: DockerProvider;
+  sessionTokenLimit: number;
+  weeklyTokenLimit: number;
 }
 
 const DATA_DIR = path.join(os.homedir(), '.lacc-data');
@@ -38,6 +40,8 @@ const DEFAULTS: GlobalConfig = {
   repoPaths: [],
   autoResumeRateLimited: true,
   dockerProvider: 'auto',
+  sessionTokenLimit: 100_000,
+  weeklyTokenLimit: 1_000_000,
 };
 
 let _config: GlobalConfig = { ...DEFAULTS };

@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import type { PoolStatus } from '@lacc/shared';
+import { Container, Clock, CalendarDays } from 'lucide-react';
 import { Button } from './ui/Button.js';
 import { FolderPickerModal } from './FolderPickerModal.js';
 
 interface Props {
   pool: PoolStatus;
   sessionCost: number;
+  sessionTokens: number;
+  weeklyTokens: number;
+  sessionTokenLimit: number;
+  weeklyTokenLimit: number;
+  hasApiKey: boolean;
   repoPaths: string[];
   activeRepo: string | null;
   onRepoSelect: (repo: string | null) => void;
@@ -15,7 +21,7 @@ interface Props {
   rateLimitRetryAfter?: number | null;
 }
 
-export function TopBar({ pool, sessionCost, repoPaths, activeRepo, onRepoSelect, onAddRepo, onRemoveRepo, onNew, rateLimitRetryAfter }: Props) {
+export function TopBar({ pool, sessionCost, sessionTokens, weeklyTokens, sessionTokenLimit, weeklyTokenLimit, hasApiKey, repoPaths, activeRepo, onRepoSelect, onAddRepo, onRemoveRepo, onNew, rateLimitRetryAfter }: Props) {
   const [showFolderPicker, setShowFolderPicker] = useState(false);
 
   return (
@@ -77,21 +83,32 @@ export function TopBar({ pool, sessionCost, repoPaths, activeRepo, onRepoSelect,
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {rateLimitRetryAfter != null && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
-              <span style={{ color: 'var(--text-ghost)' }}>autoresume after</span>
+              <span style={{ color: '#fb923c' }}>⏸ rate limited</span>
+              <span style={{ color: 'var(--text-ghost)' }}>·</span>
               <RateLimitCountdown retryAfter={rateLimitRetryAfter} />
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
-            <span style={{ color: 'var(--text-muted)' }}>
-              <span style={{ color: '#4ade80' }}>{pool.ready}</span> active
-            </span>
+          <div className="flex items-center gap-1.5 text-sm">
+            <Container size={13} className="text-text-ghost" />
+            <span className="text-status-working font-semibold">{pool.ready}</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
-            <span style={{ color: 'var(--text-muted)' }}>session</span>
-            <span style={{ color: '#f0c040', fontWeight: 600 }}>${sessionCost.toFixed(4)}</span>
-          </div>
+          <span className="text-border-emphasis text-sm select-none">│</span>
+
+          {hasApiKey ? (
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="text-text-muted">session</span>
+              <span className="text-status-ready font-semibold">${sessionCost.toFixed(4)}</span>
+            </div>
+          ) : (
+            <UsageGauge
+              sessionTokens={sessionTokens}
+              weeklyTokens={weeklyTokens}
+              sessionTokenLimit={sessionTokenLimit}
+              weeklyTokenLimit={weeklyTokenLimit}
+            />
+          )}
 
           <Button
             variant="ghost"
@@ -135,6 +152,67 @@ function RateLimitCountdown({ retryAfter }: { retryAfter: number }) {
 
   return (
     <span style={{ color: '#fb923c', fontFamily: 'monospace', fontSize: 13 }}>{remaining}</span>
+  );
+}
+
+function formatTokens(tokens: number): string {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(0)}k`;
+  return `${tokens}`;
+}
+
+function usageColorClass(pct: number): string {
+  if (pct >= 85) return 'text-status-failed';
+  if (pct >= 60) return 'text-status-ready';
+  return 'text-status-working';
+}
+
+function UsageGauge({ sessionTokens, weeklyTokens, sessionTokenLimit, weeklyTokenLimit }: {
+  sessionTokens: number;
+  weeklyTokens: number;
+  sessionTokenLimit: number;
+  weeklyTokenLimit: number;
+}) {
+  const sessionPct = sessionTokenLimit > 0 ? Math.min(100, (sessionTokens / sessionTokenLimit) * 100) : 0;
+  const weeklyPct  = weeklyTokenLimit  > 0 ? Math.min(100, (weeklyTokens  / weeklyTokenLimit)  * 100) : 0;
+
+  const tooltipText = [
+    sessionTokenLimit > 0
+      ? `Session: ${formatTokens(sessionTokens)} / ${formatTokens(sessionTokenLimit)} tokens (${Math.round(sessionPct)}%)`
+      : `Session: ${formatTokens(sessionTokens)} tokens`,
+    weeklyTokenLimit > 0
+      ? `Week: ${formatTokens(weeklyTokens)} / ${formatTokens(weeklyTokenLimit)} tokens (${Math.round(weeklyPct)}%)`
+      : `Week: ${formatTokens(weeklyTokens)} tokens`,
+  ].join('\n');
+
+  return (
+    <div className="group relative flex items-center gap-2 text-sm">
+      <div className="pointer-events-none absolute top-full right-0 mt-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-100">
+        <div className="bg-surface-overlay border border-border-emphasis text-text-body text-[11px] px-2 py-1 rounded whitespace-nowrap flex flex-col gap-0.5">
+          <span>{tooltipText.split('\n')[0]}</span>
+          <span>{tooltipText.split('\n')[1]}</span>
+        </div>
+      </div>
+      <UsagePill icon={<Clock size={12} />} pct={sessionPct} tokens={sessionTokens} />
+      <span className="text-text-ghost text-xs select-none">/</span>
+      <UsagePill icon={<CalendarDays size={12} />} pct={weeklyPct} tokens={weeklyTokens} />
+    </div>
+  );
+}
+
+function UsagePill({ icon, tokens, pct }: {
+  icon: React.ReactNode;
+  tokens: number;
+  pct: number;
+}) {
+  const colorClass = usageColorClass(pct);
+  return (
+    <div className="flex items-center gap-1">
+      <span className={colorClass}>{icon}</span>
+      <span className={`text-xs font-semibold tabular-nums select-none ${colorClass}`}>
+        {pct > 0 ? `${Math.round(pct)}%` : formatTokens(tokens)}
+      </span>
+    </div>
   );
 }
 

@@ -11,6 +11,9 @@ export interface Config {
   anthropicBaseUrl: string;
   metaModel: string;
   autoResumeRateLimited: boolean;
+  sessionTokenLimit: number;
+  weeklyTokenLimit: number;
+  hasApiKey: boolean;
 }
 
 export interface UseConfigResult {
