@@ -59,17 +59,6 @@ export function TaskList({ tasks, selectedId, onSelect, activeRepo }: Props) {
             {f}
           </ChipButton>
         ))}
-        {tasks.some(t => DONE_STATUSES.includes(t.status)) && (
-          <button
-            onClick={() => fetch('/tasks/finished', { method: 'DELETE' })}
-            title="Clear finished tasks"
-            style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.5, cursor: 'pointer', background: 'none', border: 'none', color: 'inherit', padding: '2px 4px' }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
-          >
-            clear finished
-          </button>
-        )}
       </div>
 
       {/* Task rows */}
