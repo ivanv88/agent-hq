@@ -53,13 +53,15 @@ async function resumeRateLimited(): Promise<void> {
           await pauseContainer(container_id).catch(() => {});
           throw resumeErr;
         }
-        startLogPipe(id, stream);
-        watchExecUntilDone(exec, id).catch(() => {});
-        startCostParser(id);
-        if (worktree_path) startSpinDetector(id, worktree_path);
-        startRateLimitWatcher(id, container_id);
-        startCompletionDetector(id);
-        startDevServerDetector(id, dev_port);
+        const { randomUUID } = await import('crypto');
+        const execId = randomUUID();
+        startLogPipe(id, stream, execId);
+        watchExecUntilDone(exec, id, execId).catch(() => {});
+        startCostParser(id, execId);
+        if (worktree_path) startSpinDetector(id, worktree_path, execId);
+        startRateLimitWatcher(id, container_id, execId);
+        startCompletionDetector(id, execId);
+        startDevServerDetector(id, dev_port, execId);
       }
       updateTask(id, { status: 'WORKING', rateLimitRetryAfter: null });
       broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(id)! });

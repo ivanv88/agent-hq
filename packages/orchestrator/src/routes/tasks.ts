@@ -182,13 +182,15 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     } else {
       // Post-restart case: exec stream is gone — reconnect via claude --continue
       const { stream, exec } = await resumeClaudeAfterRateLimit(task.containerId, task);
-      startLogPipe(task.id, stream);
-      watchExecUntilDone(exec, task.id).catch(() => {});
-      startCostParser(task.id);
-      if (task.worktreePath) startSpinDetector(task.id, task.worktreePath);
-      startRateLimitWatcher(task.id, task.containerId);
-      startCompletionDetector(task.id);
-      startDevServerDetector(task.id, task.devPort ?? null);
+      const { randomUUID } = await import('crypto');
+      const execId = randomUUID();
+      startLogPipe(task.id, stream, execId);
+      watchExecUntilDone(exec, task.id, execId).catch(() => {});
+      startCostParser(task.id, execId);
+      if (task.worktreePath) startSpinDetector(task.id, task.worktreePath, execId);
+      startRateLimitWatcher(task.id, task.containerId, execId);
+      startCompletionDetector(task.id, execId);
+      startDevServerDetector(task.id, task.devPort ?? null, execId);
     }
 
     updateTask(task.id, { status: 'WORKING', rateLimitRetryAfter: null });
@@ -502,7 +504,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     const stage = wf.stages.find(s => s.id === task.workflowStage);
     if (!stage) return reply.status(404).send({ error: `Stage '${task.workflowStage}' not found in workflow` });
 
-    await startStage(task, stage, wf, req.body?.extraContext);
+    await startStage(task, stage, wf, req.body?.extraContext, true /* bypassGate */);
     return { ok: true };
   });
 

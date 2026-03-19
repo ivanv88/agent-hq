@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { updateTask, getTask } from '../db/tasks.js';
 import { broadcastWsEvent } from '../index.js';
 import { startClaude, watchExecUntilDone } from '../containers/lifecycle.js';
@@ -21,14 +22,19 @@ export async function launchClaude(taskId: string, containerId: string, worktree
   const task = getTask(taskId)!;
   const { stream, exec } = await startClaude(containerId, task);
 
-  startLogPipe(taskId, stream);
-  watchExecUntilDone(exec, taskId).catch(() => {});
-  startCostParser(taskId);
-  startSpinDetector(taskId, worktreePath);
-  startRateLimitWatcher(taskId, containerId);
-  startDevServerDetector(taskId, task.devPort);
+  // Each exec gets a unique ID so its monitors listen to end:taskId:execId
+  // rather than the shared end:taskId — prevents cross-stage interference
+  // when a previous stage's stream closes after a new stage has already started.
+  const execId = randomUUID();
+
+  startLogPipe(taskId, stream, execId);
+  watchExecUntilDone(exec, taskId, execId).catch(() => {});
+  startCostParser(taskId, execId);
+  startSpinDetector(taskId, worktreePath, execId);
+  startRateLimitWatcher(taskId, containerId, execId);
+  startDevServerDetector(taskId, task.devPort, execId);
 
   // Dynamic import breaks circular dep: completion → workflow → agent → completion
   const { startCompletionDetector } = await import('../streaming/completion.js');
-  startCompletionDetector(taskId);
+  startCompletionDetector(taskId, execId);
 }

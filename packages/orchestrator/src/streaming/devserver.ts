@@ -6,7 +6,7 @@ import { broadcastWsEvent } from '../index.js';
 const DEV_SERVER_PATTERN =
   /(?:Local|listening|running at|started at|available at|Server running).*?(?:https?:\/\/)(?:localhost|0\.0\.0\.0):(\d{4,5})/i;
 
-export function startDevServerDetector(taskId: string, devPort: number | null): void {
+export function startDevServerDetector(taskId: string, devPort: number | null, execId: string): void {
   if (!devPort) return;
 
   let detected = false;
@@ -34,7 +34,7 @@ export function startDevServerDetector(taskId: string, devPort: number | null): 
 
   logEmitter.on(`log:${taskId}`, onLine);
 
-  logEmitter.once(`end:${taskId}`, () => {
+  logEmitter.once(`end:${taskId}:${execId}`, () => {
     logEmitter.off(`log:${taskId}`, onLine);
   });
 }

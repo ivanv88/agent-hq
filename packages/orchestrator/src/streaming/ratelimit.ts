@@ -5,7 +5,7 @@ import { broadcastWsEvent } from '../index.js';
 
 const activeWatchers = new Map<string, (line: string) => void>();
 
-export function startRateLimitWatcher(taskId: string, containerId: string): void {
+export function startRateLimitWatcher(taskId: string, containerId: string, execId: string): void {
   // Remove any previous watcher for this task before adding a new one
   stopRateLimitWatcher(taskId);
 
@@ -13,7 +13,7 @@ export function startRateLimitWatcher(taskId: string, containerId: string): void
   activeWatchers.set(taskId, onLine);
   logEmitter.on(`log:${taskId}`, onLine);
 
-  logEmitter.once(`end:${taskId}`, () => {
+  logEmitter.once(`end:${taskId}:${execId}`, () => {
     logEmitter.off(`log:${taskId}`, onLine);
     activeWatchers.delete(taskId);
   });

@@ -19,7 +19,7 @@ function parseStepFile(filename: string, content: string): StepDefinition {
   // parts[0] is empty (file starts with ---), parts[1] is frontmatter, parts[2]+ is body
   const frontmatterRaw = parts.length >= 3 ? parts[1] : '';
   const promptBody = parts.length >= 3 ? parts.slice(2).join('---').trim() : content.trim();
-  const fm = yaml.load(frontmatterRaw) as Record<string, unknown>;
+  const fm = (yaml.load(frontmatterRaw) ?? {}) as Record<string, unknown>;
   const stem = path.basename(filename, '.md');
   return {
     name: (fm.name as string) ?? stem,

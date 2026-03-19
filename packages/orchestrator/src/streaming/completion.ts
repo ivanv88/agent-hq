@@ -7,19 +7,21 @@ import { stopCostParser } from './cost.js';
 import { killImmediate } from '../containers/lifecycle.js';
 
 
-export function startCompletionDetector(taskId: string): void {
-  const onLine = (line: string) => checkLine(taskId, line, onLine);
+export function startCompletionDetector(taskId: string, execId: string): void {
+  const endEvent = `end:${taskId}:${execId}`;
+  const onEnd = () => {
+    logEmitter.off(`log:${taskId}`, onLine);
+    handleCompletion(taskId, 'error', 'Stream ended without a result event');
+  };
+  const onLine = (line: string) => checkLine(taskId, line, onLine, onEnd, endEvent);
   logEmitter.on(`log:${taskId}`, onLine);
 
   // Stream ended without a result event — treat as an error so the task
   // does not silently appear as successful.
-  logEmitter.once(`end:${taskId}`, () => {
-    logEmitter.off(`log:${taskId}`, onLine);
-    handleCompletion(taskId, 'error', 'Stream ended without a result event');
-  });
+  logEmitter.once(endEvent, onEnd);
 }
 
-async function checkLine(taskId: string, line: string, onLine: (line: string) => void): Promise<void> {
+async function checkLine(taskId: string, line: string, onLine: (line: string) => void, onEnd: () => void, endEvent: string): Promise<void> {
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(line);
@@ -30,7 +32,9 @@ async function checkLine(taskId: string, line: string, onLine: (line: string) =>
   if (parsed.type === 'result') {
     const exitCode = parsed.exit_code ?? parsed.subtype;
     const isSuccess = exitCode === 'success' || exitCode === 0;
+    // Remove both listeners before any await so neither fires again for this stage
     logEmitter.off(`log:${taskId}`, onLine);
+    logEmitter.off(endEvent, onEnd);
 
     let failureReason: string | null = null;
     if (!isSuccess) {

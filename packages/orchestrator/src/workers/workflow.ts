@@ -7,16 +7,17 @@ import type { Task, WorkflowDefinition, WorkflowStageConfig } from '@lacc/shared
 // ── Template variable resolution ─────────────────────────────────────────────
 
 export function resolveTemplateVars(template: string, task: Task, workflow: WorkflowDefinition): string {
-  const docsDir = `${task.worktreePath}/${workflow.docsDir ?? 'ai-docs'}`;
+  const containerWorkspace = '/workspace';
+  const containerDocsDir = `${containerWorkspace}/${workflow.docsDir ?? 'ai-docs'}`;
   const vars: Record<string, string> = {
-    '{{docs_dir}}':  docsDir,
-    '{{workspace}}': '/workspace',
-    '{{spec}}':      `${docsDir}/.spec.md`,
-    '{{plan}}':      `${docsDir}/.plan.md`,
-    '{{review}}':    `${docsDir}/.review.md`,
-    '{{jira}}':      `${docsDir}/.jira.md`,
+    '{{docs_dir}}':  containerDocsDir,
+    '{{workspace}}': containerWorkspace,
+    '{{spec}}':      `${containerDocsDir}/.spec.md`,
+    '{{plan}}':      `${containerDocsDir}/.plan.md`,
+    '{{review}}':    `${containerDocsDir}/.review.md`,
+    '{{jira}}':      `${containerDocsDir}/.jira.md`,
     '{{branch}}':    task.branchName,
-    '{{repo}}':      task.repoPath,
+    '{{repo}}':      '/original-repo',
   };
   let result = template;
   for (const [token, value] of Object.entries(vars)) {
@@ -85,7 +86,8 @@ export async function startStage(
   task: Task,
   stage: WorkflowStageConfig,
   workflow?: WorkflowDefinition,
-  extraContext?: string
+  extraContext?: string,
+  bypassGate = false,
 ): Promise<void> {
   const wf = workflow ?? getWorkflow(task.workflowName!)!;
   if (!wf) throw new Error(`Workflow '${task.workflowName}' not found`);
@@ -105,7 +107,7 @@ export async function startStage(
 
   broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
 
-  if (stage.gate === 'auto' || stage.gate === undefined) {
+  if (bypassGate || stage.gate === 'auto' || stage.gate === undefined) {
     // Launch immediately in the still-running container
     await launchClaude(task.id, task.containerId!, task.worktreePath!);
   } else {

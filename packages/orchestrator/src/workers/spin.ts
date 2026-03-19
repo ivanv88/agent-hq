@@ -23,7 +23,7 @@ const spinStates = new Map<string, SpinState>();
 
 const TEST_PATTERNS = /jest|vitest|pytest|cargo test|go test|mocha|jasmine/i;
 
-export function startSpinDetector(taskId: string, worktreePath: string): void {
+export function startSpinDetector(taskId: string, worktreePath: string, execId: string): void {
   const watcher = chokidar.watch(worktreePath, {
     ignored: /(node_modules|\.git|dist|\.next)/,
     ignoreInitial: true,
@@ -64,7 +64,7 @@ export function startSpinDetector(taskId: string, worktreePath: string): void {
 
   spinStates.set(taskId, state);
 
-  logEmitter.once(`end:${taskId}`, () => stopSpinDetector(taskId));
+  logEmitter.once(`end:${taskId}:${execId}`, () => stopSpinDetector(taskId));
 }
 
 async function checkSpin(taskId: string, state: SpinState): Promise<void> {

@@ -290,11 +290,13 @@ async function resolveImageForTask(task: Task): Promise<string> {
 export async function watchExecUntilDone(
   exec: import('dockerode').Exec,
   taskId: string,
+  execId: string,
 ): Promise<void> {
   const { logEmitter } = await import('../streaming/logs.js');
   let ended = false;
 
-  logEmitter.once(`end:${taskId}`, () => { ended = true; });
+  const endEvent = `end:${taskId}:${execId}`;
+  logEmitter.once(endEvent, () => { ended = true; });
 
   const poll = async (): Promise<void> => {
     if (ended) return;
@@ -303,7 +305,7 @@ export async function watchExecUntilDone(
       if (!info.Running) {
         if (!ended) {
           ended = true;
-          logEmitter.emit(`end:${taskId}`);
+          logEmitter.emit(endEvent);
         }
         return;
       }
@@ -311,7 +313,7 @@ export async function watchExecUntilDone(
       // container gone
       if (!ended) {
         ended = true;
-        logEmitter.emit(`end:${taskId}`);
+        logEmitter.emit(endEvent);
       }
       return;
     }
