@@ -23,7 +23,7 @@ export function useSessionCost(lastEvent: WsEvent | null): SessionUsage {
   const fetchCost = () => {
     fetch('/session/cost')
       .then(r => r.json())
-      .then((d: SessionUsage) => setUsage(d))
+      .then((d: any) => setUsage({ ...d, costUsd: d.totalCostUsd ?? 0 }))
       .catch(console.error);
   };
 
