@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "predev": "tsx scripts/ensure-docker.ts",
+    "predev": "tsx scripts/ensure-docker.ts && npx tsc -b packages/shared --clean && npx tsc -b packages/shared",
     "dev": "concurrently \"npm run dev --workspace=packages/orchestrator\" \"npm run dev --workspace=packages/ui\"",
     "build": "tsc -b && npm run build --workspace=packages/ui",
     "prestart": "tsx scripts/ensure-docker.ts",
@@ -16,7 +16,6 @@
   },
   "devDependencies": {
     "@inquirer/prompts": "^8.3.0",
-    "@postman/final-node-keytar": "^7.9.0",
     "concurrently": "^9.1.0",
     "tsx": "^4.21.0",
     "typescript": "^5.7.0"
