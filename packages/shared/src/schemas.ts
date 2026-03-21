@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const SpawnTaskInputSchema = z.object({
   repoPath: z.string().min(1),
-  prompt: z.string(),
+  prompt: z.string().min(1),
   taskType: z.enum(['feature', 'fix', 'refactor', 'test', 'chore', 'docs']).optional(),
   oversightMode: z.enum(['GATE_ON_COMPLETION', 'GATE_ALWAYS', 'NOTIFY_ONLY']).optional(),
   model: z.string().optional(),

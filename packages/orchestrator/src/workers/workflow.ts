@@ -2,28 +2,13 @@ import { getTask, updateTask } from '../db/tasks.js';
 import { broadcastWsEvent } from '../index.js';
 import { getWorkflow, getStep } from '../db/workflows.js';
 import { launchClaude } from './agent.js';
+import { resolvePrompt } from '../workflows/variables.js';
 import type { Task, WorkflowDefinition, WorkflowStageConfig } from '@lacc/shared';
 
 // ── Template variable resolution ─────────────────────────────────────────────
 
 export function resolveTemplateVars(template: string, task: Task, workflow: WorkflowDefinition): string {
-  const containerWorkspace = '/workspace';
-  const containerDocsDir = `${containerWorkspace}/${workflow.docsDir ?? 'ai-docs'}`;
-  const vars: Record<string, string> = {
-    '{{docs_dir}}':  containerDocsDir,
-    '{{workspace}}': containerWorkspace,
-    '{{spec}}':      `${containerDocsDir}/.spec.md`,
-    '{{plan}}':      `${containerDocsDir}/.plan.md`,
-    '{{review}}':    `${containerDocsDir}/.review.md`,
-    '{{jira}}':      `${containerDocsDir}/.jira.md`,
-    '{{branch}}':    task.branchName,
-    '{{repo}}':      '/original-repo',
-  };
-  let result = template;
-  for (const [token, value] of Object.entries(vars)) {
-    result = result.replaceAll(token, value);
-  }
-  return result;
+  return resolvePrompt(template, task, workflow);
 }
 
 // ── Stage lookup helpers ──────────────────────────────────────────────────────

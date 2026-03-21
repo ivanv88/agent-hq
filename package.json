@@ -12,7 +12,12 @@
     "prestart": "tsx scripts/ensure-docker.ts",
     "start": "node packages/orchestrator/dist/index.js",
     "setup": "tsx scripts/setup.ts",
-    "docker:build": "docker build -t lacc-agent-base docker/agent-base/"
+    "docker:build": "docker build -t lacc-agent-base docker/agent-base/",
+    "test": "vitest run --reporter=verbose",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run tests/unit --reporter=verbose",
+    "test:api": "vitest run tests/api --reporter=verbose"
   },
   "devDependencies": {
     "@inquirer/prompts": "^8.3.0",

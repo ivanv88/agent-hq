@@ -22,7 +22,7 @@ function getContextWindowSize(model: string): number {
   return DEFAULT_CONTEXT_WINDOW;
 }
 
-interface CostState {
+export interface CostState {
   costUsd: number;
   costOffset: number;  // accumulated from previous workflow stages
   inputTokens: number;
@@ -32,13 +32,8 @@ interface CostState {
   context85Notified: boolean;
 }
 
-const costStates = new Map<string, CostState>();
-const flushIntervals = new Map<string, ReturnType<typeof setInterval>>();
-
-export function startCostParser(taskId: string, execId: string): void {
-  const prev = getTask(taskId);
-  const costOffset = prev?.costUsd ?? 0;
-  costStates.set(taskId, {
+export function createCostState(costOffset = 0): CostState {
+  return {
     costUsd: costOffset,
     costOffset,
     inputTokens: 0,
@@ -46,9 +41,55 @@ export function startCostParser(taskId: string, execId: string): void {
     contextTokensUsed: null,
     dirty: false,
     context85Notified: false,
-  });
+  };
+}
 
-  const onLine = (line: string) => parseLine(taskId, line);
+// Pure line parser — updates state only, no external calls or side effects.
+// Context-window 85% notification is handled by the taskId-scoped wrapper below.
+export function parseLine(state: CostState, line: string): void {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return;
+  }
+
+  if (parsed.type === 'result') {
+    const usage = parsed.usage as Record<string, number> | undefined;
+    if (usage) {
+      state.inputTokens = usage.input_tokens ?? state.inputTokens;
+      state.outputTokens = usage.output_tokens ?? state.outputTokens;
+    }
+    if (typeof parsed.total_cost_usd === 'number') {
+      state.costUsd = state.costOffset + parsed.total_cost_usd;
+    }
+    state.dirty = true;
+  }
+
+  if (parsed.type === 'usage' || parsed.type === 'message_delta') {
+    const usage = (parsed.usage ?? parsed.delta) as Record<string, number> | undefined;
+    if (usage) {
+      if (usage.input_tokens) state.inputTokens = usage.input_tokens;
+      if (usage.output_tokens) state.outputTokens += usage.output_tokens;
+      state.dirty = true;
+    }
+  }
+
+  if (typeof parsed.context_tokens_used === 'number') {
+    state.contextTokensUsed = parsed.context_tokens_used;
+    state.dirty = true;
+  }
+}
+
+const costStates = new Map<string, CostState>();
+const flushIntervals = new Map<string, ReturnType<typeof setInterval>>();
+
+export function startCostParser(taskId: string, execId: string): void {
+  const prev = getTask(taskId);
+  const costOffset = prev?.costUsd ?? 0;
+  costStates.set(taskId, createCostState(costOffset));
+
+  const onLine = (line: string) => parseLineForTask(taskId, line);
   logEmitter.on(`log:${taskId}`, onLine);
 
   // Flush every 10 seconds
@@ -70,60 +111,27 @@ export function stopCostParser(taskId: string): void {
   }
 }
 
-function parseLine(taskId: string, line: string): void {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(line);
-  } catch {
-    return;
-  }
-
+function parseLineForTask(taskId: string, line: string): void {
   const state = costStates.get(taskId);
   if (!state) return;
 
-  // stream-json result event
-  if (parsed.type === 'result') {
-    const usage = parsed.usage as Record<string, number> | undefined;
-    if (usage) {
-      state.inputTokens = usage.input_tokens ?? state.inputTokens;
-      state.outputTokens = usage.output_tokens ?? state.outputTokens;
-    }
-    if (typeof parsed.total_cost_usd === 'number') {
-      state.costUsd = state.costOffset + parsed.total_cost_usd;
-    }
-    state.dirty = true;
-  }
+  parseLine(state, line);
 
-  // Usage events during streaming
-  if (parsed.type === 'usage' || parsed.type === 'message_delta') {
-    const usage = (parsed.usage ?? parsed.delta) as Record<string, number> | undefined;
-    if (usage) {
-      if (usage.input_tokens) state.inputTokens = usage.input_tokens;
-      if (usage.output_tokens) state.outputTokens += usage.output_tokens;
-      state.dirty = true;
-    }
-  }
-
-  // Context window tokens
-  if (typeof parsed.context_tokens_used === 'number') {
-    state.contextTokensUsed = parsed.context_tokens_used;
-    state.dirty = true;
-
-    if (!state.context85Notified) {
-      const task = getTask(taskId);
-      if (task) {
-        const windowSize = getContextWindowSize(task.model);
-        if (state.contextTokensUsed >= windowSize * CONTEXT_WARN_THRESHOLD) {
-          state.context85Notified = true;
-          broadcastWsEvent({
-            type: 'NOTIFICATION',
-            notification: {
-              message: `Agent ${task.branchName} context window ${Math.round(CONTEXT_WARN_THRESHOLD * 100)}% full — consider restarting with summary`,
-              taskId,
-              level: 'warning',
-            },
-          });
-        }
+  // Context window 85% notification (side-effectful, kept here outside the pure parseLine)
+  if (typeof state.contextTokensUsed === 'number' && !state.context85Notified) {
+    const task = getTask(taskId);
+    if (task) {
+      const windowSize = getContextWindowSize(task.model);
+      if (state.contextTokensUsed >= windowSize * CONTEXT_WARN_THRESHOLD) {
+        state.context85Notified = true;
+        broadcastWsEvent({
+          type: 'NOTIFICATION',
+          notification: {
+            message: `Agent ${task.branchName} context window ${Math.round(CONTEXT_WARN_THRESHOLD * 100)}% full — consider restarting with summary`,
+            taskId,
+            level: 'warning',
+          },
+        });
       }
     }
   }

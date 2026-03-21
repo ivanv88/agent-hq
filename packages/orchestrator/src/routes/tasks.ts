@@ -490,7 +490,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     const task = getTask(req.params.id);
     if (!task) return reply.status(404).send({ error: 'Task not found' });
     if (task.workflowStatus !== 'waiting_gate') {
-      return reply.status(400).send({ error: 'Task is not at a manual gate' });
+      return reply.status(409).send({ error: 'Task is not at a manual gate' });
     }
     if (!task.workflowName || !task.workflowStage) {
       return reply.status(400).send({ error: 'Task has no active workflow stage' });
