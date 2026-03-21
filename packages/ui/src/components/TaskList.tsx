@@ -2,22 +2,13 @@ import { useState, useMemo } from 'react';
 import type { Task, TaskStatus } from '@lacc/shared';
 import { ChipButton } from './ui/ChipButton.js';
 import { StatusIndicator, getStatusColor } from './ui/StatusIndicator.js';
+import { elapsedStr } from '../utils.js';
 
 type Filter = 'all' | 'active' | 'review' | 'done';
 
 const ACTIVE_STATUSES: TaskStatus[] = ['SPAWNING', 'WORKING', 'SPINNING', 'RATE_LIMITED', 'PAUSED'];
 const REVIEW_STATUSES: TaskStatus[] = ['READY'];
 const DONE_STATUSES: TaskStatus[] = ['DONE', 'FAILED', 'KILLED', 'DISCARDED'];
-
-function elapsedStr(start: string | Date | null): string {
-  if (!start) return '';
-  const ms = Date.now() - new Date(start).getTime();
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h${m % 60}m`;
-}
 
 interface Props {
   tasks: Task[];

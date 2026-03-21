@@ -5,6 +5,7 @@ export default defineConfig({
     projects: [
       'packages/orchestrator/vitest.config.ts',
       'packages/shared/vitest.config.ts',
+      'packages/ui/vitest.config.ts',
     ],
   },
 });
