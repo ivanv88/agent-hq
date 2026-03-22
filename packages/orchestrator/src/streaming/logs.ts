@@ -82,6 +82,15 @@ export function startLogPipe(taskId: string, stream: NodeJS.ReadableStream, exec
   });
 }
 
+/**
+ * Inject a synthetic log line into the full pipeline: ring buffer, DB, and
+ * live SSE subscribers. Use for server-generated events (e.g. user_message)
+ * that must appear alongside agent output in chronological order.
+ */
+export function injectLogLine(taskId: string, line: string): void {
+  pushLine(taskId, line);
+}
+
 function pushLine(taskId: string, line: string): void {
   const buf = ringBuffers.get(taskId) ?? [];
   buf.push(line);

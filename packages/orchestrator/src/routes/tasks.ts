@@ -12,7 +12,7 @@ import { readDevcontainerConfig } from '../containers/devcontainer.js';
 import { assignPort, releasePort, reclaimPort } from '../containers/ports.js';
 import { claim, configure, watchExecUntilDone, runPostCreate, killContainer, killImmediate, killTaskContainerIfExists, pauseContainer, resumeContainer, resumeClaudeAfterRateLimit } from '../containers/lifecycle.js';
 import { createWorktree, generateBranchName, isGitRepo } from '../git/worktree.js';
-import { startLogPipe, preloadFromDb, getRingBuffer, hasActiveStream, logEmitter, RING_SIZE } from '../streaming/logs.js';
+import { startLogPipe, preloadFromDb, getRingBuffer, hasActiveStream, logEmitter, RING_SIZE, injectLogLine } from '../streaming/logs.js';
 import { startCostParser } from '../streaming/cost.js';
 import { startSpinDetector, stopSpinDetector } from '../workers/spin.js';
 import { startRateLimitWatcher, stopRateLimitWatcher } from '../streaming/ratelimit.js';
@@ -264,6 +264,14 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     // Issue 45 fix: extract decoded assistant text from stream-json, not raw blobs
     const rawChunks = getLastNChunks(task.id, 200);
     const progressContext = extractAssistantText(rawChunks).slice(-50).join('\n').replace(/\0/g, '');
+
+    // Inject user feedback into the full log pipeline (ring buffer + DB + live SSE)
+    // so it appears in chronological order both live and on replay
+    injectLogLine(task.id, JSON.stringify({
+      type: 'user_message',
+      content: feedback,
+      timestamp: new Date().toISOString(),
+    }));
 
     const compoundPrompt =
       `${task.prompt}\n\n---\nFeedback from reviewer:\n${feedback}\n\n---\nContext (last agent output):\n${progressContext}`;

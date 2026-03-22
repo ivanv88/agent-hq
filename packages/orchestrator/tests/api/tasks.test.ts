@@ -142,3 +142,84 @@ describe('POST /tasks/:id/pause', () => {
     expect(res.statusCode).toBe(409);
   });
 });
+
+describe('POST /tasks/:id/feedback', () => {
+  it('returns 404 for unknown task', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/tasks/non-existent-id/feedback',
+      payload: { feedback: 'fix the tests' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 400 for missing feedback', async () => {
+    const spawn = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      payload: validSpawnInput,
+    });
+    const { taskId } = spawn.json();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tasks/${taskId}/feedback`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('injects user_message into log stream', async () => {
+    const { injectLogLine } = await import('../../src/streaming/logs.js');
+    vi.mocked(injectLogLine).mockClear();
+
+    const spawn = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      payload: validSpawnInput,
+    });
+    const { taskId } = spawn.json();
+
+    // Put task in READY so feedback is accepted
+    const { updateTask } = await import('../../src/db/tasks.js');
+    updateTask(taskId, { status: 'READY' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tasks/${taskId}/feedback`,
+      payload: { feedback: 'fix the tests please' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // Verify injectLogLine was called with a user_message
+    expect(injectLogLine).toHaveBeenCalledWith(
+      taskId,
+      expect.stringContaining('"type":"user_message"'),
+    );
+    const callArg = vi.mocked(injectLogLine).mock.calls[0][1];
+    const parsed = JSON.parse(callArg);
+    expect(parsed.content).toBe('fix the tests please');
+    expect(parsed.timestamp).toBeDefined();
+  });
+
+  it('increments retryCount', async () => {
+    const spawn = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      payload: validSpawnInput,
+    });
+    const { taskId } = spawn.json();
+
+    const { updateTask } = await import('../../src/db/tasks.js');
+    updateTask(taskId, { status: 'READY' });
+
+    await app.inject({
+      method: 'POST',
+      url: `/tasks/${taskId}/feedback`,
+      payload: { feedback: 'try again' },
+    });
+
+    const check = await app.inject({ method: 'GET', url: `/tasks/${taskId}` });
+    expect(check.json().retryCount).toBe(1);
+  });
+});

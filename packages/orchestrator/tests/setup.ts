@@ -118,6 +118,7 @@ vi.mock('../src/streaming/logs.js', () => ({
   logEmitter: { on: vi.fn(), once: vi.fn(), off: vi.fn(), emit: vi.fn() },
   RING_SIZE: 500,
   initRingBuffer: vi.fn(),
+  injectLogLine: vi.fn(),
 }));
 
 vi.mock('../src/streaming/cost.js', () => ({

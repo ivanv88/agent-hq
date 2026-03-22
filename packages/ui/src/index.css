@@ -40,6 +40,17 @@
   --color-status-failed: #f87171;
   --color-status-killed: #555;
 
+  /* ─── Feed-specific colors ─── */
+  --color-feed-tool-bg: #0f0f1a;
+  --color-feed-tool-border: #252535;
+  --color-feed-user-bg: #1a1a2e;
+  --color-feed-user-border: #2d2d4a;
+  --color-feed-accent-blue: #4f8ef7;
+  --color-feed-accent-green: #3fb950;
+  --color-feed-accent-red: #f85149;
+  --color-feed-accent-orange: #d29922;
+  --color-feed-accent-purple: #bc8cff;
+
   /* ─── Status background colors ─── */
   --color-status-working-bg: #0a1f10;
   --color-status-spawning-bg: #14102a;

@@ -207,6 +207,28 @@ export interface CheckpointInfo {
   isCurrent: boolean;
 }
 
+// ── Feed message types ────────────────────────────────────────────────────────
+
+export interface FeedTodo {
+  id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  priority: 'high' | 'medium' | 'low';
+}
+
+export type FeedMessage =
+  | { id: string; type: 'text'; content: string; streaming: boolean }
+  | { id: string; type: 'thinking'; content: string; collapsed: boolean }
+  | { id: string; type: 'tool_use'; name: string; input: Record<string, unknown>; collapsed: boolean }
+  | { id: string; type: 'tool_result'; toolName: string; output: string; isError: boolean; collapsed: boolean }
+  | { id: string; type: 'file_change'; action: 'Read' | 'Write' | 'Edit'; path: string; insertions?: number; deletions?: number }
+  | { id: string; type: 'todo_list'; todos: FeedTodo[] }
+  | { id: string; type: 'result'; cost: number; durationMs: number; status: 'success' | 'error' }
+  | { id: string; type: 'user_message'; content: string; timestamp: Date }
+  | { id: string; type: 'stage_complete'; stageName: string; nextStageName?: string; checkpointCreated: boolean }
+  | { id: string; type: 'error'; message: string; output?: string }
+  | { id: string; type: 'system_info'; text: string };
+
 export interface FeedbackInput {
   feedback: string;
 }

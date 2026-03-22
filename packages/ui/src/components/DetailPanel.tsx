@@ -1,12 +1,14 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Task } from '@lacc/shared';
-import { Terminal } from './Terminal.js';
 import { DiffView } from './DiffView.js';
 import { ActionBar } from './ActionBar.js';
 import { Tabs, TabBadge, type Tab } from './ui/Tabs.js';
 import { WorkflowTab } from './WorkflowTab.js';
+import { MessageFeed, CommandBox, CommandPalette } from './feed/index.js';
+import type { ParsedInput } from './feed/index.js';
+import { useTaskFeed } from '../hooks/useTaskFeed.js';
 
-type TabId = 'terminal' | 'diff' | 'preview' | 'workflow';
+type TabId = 'feed' | 'diff' | 'preview' | 'workflow';
 
 interface Props {
   task: Task | null;
@@ -31,13 +33,16 @@ export function DetailPanel({
   onOpenEditor, onKill, onPause, onResume, onRestart, onMemory, onCommit, onMerge,
   onWorkflowContinue, onWorkflowSkip, onWorkflowRerun
 }: Props) {
-  const [tab, setTab] = useState<TabId>('terminal');
+  const [tab, setTab] = useState<TabId>('feed');
+  const [slashPrefix, setSlashPrefix] = useState<string | null>(null);
+
+  const { messages, appendUserMessage } = useTaskFeed(task?.id ?? null, task?.retryCount ?? 0);
 
   const showDiff = task ? ['READY', 'DONE'].includes(task.status) : false;
   const showPreview = Boolean(task?.devServerUrl);
 
   const tabs = useMemo<Tab[]>(() => {
-    const result: Tab[] = [{ id: 'terminal', label: 'terminal' }];
+    const result: Tab[] = [{ id: 'feed', label: 'feed' }];
     if (showDiff) {
       result.push({
         id: 'diff',
@@ -49,7 +54,7 @@ export function DetailPanel({
       result.push({ id: 'preview', label: 'preview' });
     }
     if (task?.workflowName) {
-      result.splice(1, 0, {   // insert after terminal
+      result.splice(1, 0, {
         id: 'workflow',
         label: 'workflow',
         badge: task.workflowStatus === 'waiting_gate'
@@ -64,9 +69,52 @@ export function DetailPanel({
     if (task?.workflowStatus === 'waiting_gate') setTab('workflow');
   }, [task?.workflowStatus]);
 
+  // Route CommandBox submissions to the correct API
+  const handleCommandSubmit = useCallback((input: ParsedInput) => {
+    if (!task) return;
+
+    if (input.kind === 'command') {
+      // Commands are ephemeral — show client-side only
+      const displayText = `/${input.command}${input.args ? ` ${input.args}` : ''}`;
+      appendUserMessage(displayText);
+      routeCommand(task, input.command, input.args, {
+        onComplete, onDiscard, onFeedback, onKill, onPause, onResume, onRestart,
+        onWorkflowContinue, onWorkflowSkip, onWorkflowRerun,
+      });
+    } else if (input.kind === 'continue') {
+      appendUserMessage(input.context ?? '/continue');
+      fetch(`/tasks/${task.id}/stage/continue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: input.context }),
+      });
+    } else if (input.kind === 'feedback') {
+      // Don't appendUserMessage — server injects user_message into the SSE
+      // stream via injectLogLine, so it arrives live and replays in order
+      fetch(`/tasks/${task.id}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback: input.text }),
+      });
+    }
+  }, [task, appendUserMessage, onComplete, onDiscard, onFeedback, onKill, onPause, onResume, onRestart, onWorkflowContinue, onWorkflowSkip, onWorkflowRerun]);
+
+  const handlePaletteSelect = useCallback((command: string) => {
+    setSlashPrefix(null);
+    // Insert command into the box — handled by filling text
+    // For now, route immediately
+    if (task) {
+      appendUserMessage(`/${command}`);
+      routeCommand(task, command, '', {
+        onComplete, onDiscard, onFeedback, onKill, onPause, onResume, onRestart,
+        onWorkflowContinue, onWorkflowSkip, onWorkflowRerun,
+      });
+    }
+  }, [task, appendUserMessage, onComplete, onDiscard, onFeedback, onKill, onPause, onResume, onRestart, onWorkflowContinue, onWorkflowSkip, onWorkflowRerun]);
+
   if (!task) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#666] text-[13px]">
+      <div className="flex-1 flex items-center justify-center text-text-muted text-[13px]">
         Select a task or press N to create one
       </div>
     );
@@ -74,10 +122,6 @@ export function DetailPanel({
 
   const openBrowser = () => {
     if (task.devServerUrl) window.open(task.devServerUrl, '_blank');
-  };
-
-  const openEditor = () => {
-    onOpenEditor(task);
   };
 
   return (
@@ -127,11 +171,31 @@ export function DetailPanel({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        {/* Terminal is always mounted so the SSE connection and xterm state
-            survive tab switches. Visibility is toggled via CSS so the DOM
-            node stays alive but takes no layout space when hidden. */}
-        <Terminal key={`${task.id}-${task.retryCount}`} taskId={task.id} active={tab === 'terminal'} hidden={tab !== 'terminal'} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {tab === 'feed' && (
+          <>
+            <MessageFeed
+              key={`${task.id}-${task.retryCount}`}
+              messages={messages}
+              taskId={task.id}
+            />
+            <div className="relative shrink-0">
+              {slashPrefix && (
+                <CommandPalette
+                  filter={slashPrefix}
+                  taskStatus={task.status}
+                  onSelect={handlePaletteSelect}
+                  onClose={() => setSlashPrefix(null)}
+                />
+              )}
+              <CommandBox
+                task={task}
+                onSubmit={handleCommandSubmit}
+                onSlashChange={setSlashPrefix}
+              />
+            </div>
+          </>
+        )}
         {tab === 'diff' && showDiff && (
           <DiffView key={task.id} taskId={task.id} active={tab === 'diff'} />
         )}
@@ -159,13 +223,13 @@ export function DetailPanel({
         )}
       </div>
 
-      {/* Action bar */}
+      {/* Action bar — kept alongside CommandBox for buttons not yet in palette */}
       <ActionBar
         task={task}
         onComplete={() => onComplete(task)}
         onDiscard={() => onDiscard(task)}
         onFeedback={() => onFeedback(task)}
-        onOpenEditor={openEditor}
+        onOpenEditor={() => onOpenEditor(task)}
         onOpenBrowser={openBrowser}
         onKill={() => onKill(task)}
         onPause={() => onPause(task)}
@@ -180,4 +244,65 @@ export function DetailPanel({
       />
     </div>
   );
+}
+
+/** Route a slash command to the correct API call or callback */
+function routeCommand(
+  task: Task,
+  command: string,
+  args: string,
+  actions: {
+    onComplete: (task: Task) => void;
+    onDiscard: (task: Task) => void;
+    onFeedback: (task: Task) => void;
+    onKill: (task: Task) => void;
+    onPause: (task: Task) => void;
+    onResume: (task: Task) => void;
+    onRestart: (task: Task) => void;
+    onWorkflowContinue: (taskId: string) => void;
+    onWorkflowSkip: (taskId: string) => void;
+    onWorkflowRerun: (taskId: string) => void;
+  },
+) {
+  switch (command) {
+    case 'approve':
+      actions.onComplete(task);
+      break;
+    case 'reject':
+      actions.onDiscard(task);
+      break;
+    case 'continue':
+      actions.onWorkflowContinue(task.id);
+      break;
+    case 'skip':
+      actions.onWorkflowSkip(task.id);
+      break;
+    case 'rerun':
+      actions.onWorkflowRerun(task.id);
+      break;
+    case 'pause':
+      actions.onPause(task);
+      break;
+    case 'resume':
+      actions.onResume(task);
+      break;
+    case 'restart':
+      actions.onRestart(task);
+      break;
+    case 'kill':
+      actions.onKill(task);
+      break;
+    case 'compact':
+      fetch(`/tasks/${task.id}/compact`, { method: 'POST' });
+      break;
+    case 'checkpoint':
+      fetch(`/tasks/${task.id}/checkpoint`, { method: 'POST' });
+      break;
+    // cost and diff are client-side — no-op for now, would inject a local FeedMessage
+    case 'cost':
+    case 'diff':
+      break;
+    default:
+      console.warn(`Unknown command: /${command}`);
+  }
 }
