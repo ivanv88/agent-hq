@@ -163,6 +163,23 @@ function runMigrations() {
 
     db.pragma('user_version = 3');
   }
+
+  if (version < 4) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS workflow_checkpoints (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        stage_id TEXT NOT NULL,
+        git_ref TEXT NOT NULL,
+        worktree_path TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (task_id) REFERENCES tasks(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_checkpoints_task ON workflow_checkpoints(task_id);
+    `);
+    db.pragma('user_version = 4');
+  }
 }
 
 export { DATA_DIR, DB_PATH };

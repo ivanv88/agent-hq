@@ -3,6 +3,7 @@ import { getDb } from '../db/init.js';
 import { listActiveNonTerminalTasks, updateTask, listTasks, getTask } from '../db/tasks.js';
 import { listAllPooled, removePooled } from '../db/pool.js';
 import { cleanupWorktree } from '../git/worktree.js';
+import { cleanupCheckpointRefs } from '../workflows/checkpoints.js';
 import { docker, killImmediate, resumeContainer, pauseContainer, resumeClaudeAfterRateLimit, watchExecUntilDone } from '../containers/lifecycle.js';
 import { hasActiveStream, startLogPipe } from '../streaming/logs.js';
 import { startCostParser } from '../streaming/cost.js';
@@ -124,6 +125,8 @@ async function cleanupFlaggedWorktrees(): Promise<void> {
 
     try {
       if (fs.existsSync(task.worktree_path)) {
+        // Clean up checkpoint refs before removing the worktree
+        await cleanupCheckpointRefs(task.id, task.worktree_path);
         await cleanupWorktree(task.worktree_path, task.branch_name);
         // Also rm -rf just in case
         fs.rmSync(task.worktree_path, { recursive: true, force: true });

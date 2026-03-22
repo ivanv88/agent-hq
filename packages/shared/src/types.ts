@@ -191,6 +191,22 @@ export interface StepDefinition {
   prompt: string;         // full prompt body (below frontmatter)
 }
 
+export interface WorkflowCheckpoint {
+  id: string;
+  taskId: string;
+  stageId: string;
+  gitRef: string;
+  worktreePath: string;
+  createdAt: Date;
+}
+
+export interface CheckpointInfo {
+  stageId: string;
+  stageName: string;
+  createdAt: Date;
+  isCurrent: boolean;
+}
+
 export interface FeedbackInput {
   feedback: string;
 }

@@ -542,6 +542,51 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     return { ok: true };
   });
 
+  // ── Checkpoint endpoints ──────────────────────────────────────────────────
+
+  // List all checkpoints for a task
+  fastify.get<{ Params: { id: string } }>('/tasks/:id/checkpoints', async (req, reply) => {
+    const task = getTask(req.params.id);
+    if (!task) return reply.status(404).send({ error: 'Task not found' });
+
+    const { listCheckpoints } = await import('../db/checkpoints.js');
+    const checkpoints = listCheckpoints(task.id);
+
+    if (!task.workflowName) return checkpoints.map(cp => ({
+      stageId: cp.stageId,
+      stageName: cp.stageId,
+      createdAt: cp.createdAt,
+      isCurrent: cp.stageId === task.workflowStage,
+    }));
+
+    const { getWorkflow } = await import('../db/workflows.js');
+    const wf = getWorkflow(task.workflowName);
+    const stageNames = new Map(wf?.stages.map(s => [s.id, s.name]) ?? []);
+
+    return checkpoints.map(cp => ({
+      stageId: cp.stageId,
+      stageName: stageNames.get(cp.stageId) ?? (cp.stageId === 'initial' ? 'Initial state' : cp.stageId),
+      createdAt: cp.createdAt,
+      isCurrent: cp.stageId === task.workflowStage,
+    }));
+  });
+
+  // Restore to a checkpoint
+  fastify.post<{ Params: { id: string; stageId: string } }>('/tasks/:id/checkpoints/:stageId/restore', async (req, reply) => {
+    const task = getTask(req.params.id);
+    if (!task) return reply.status(404).send({ error: 'Task not found' });
+
+    if (task.workflowStatus === 'running') {
+      return reply.status(409).send({ error: 'Cannot restore while stage is running. Kill or wait for completion first.' });
+    }
+
+    const { restoreCheckpoint } = await import('../workflows/checkpoints.js');
+    await restoreCheckpoint(task.id, req.params.stageId);
+
+    broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
+    return { ok: true, restoredTo: req.params.stageId };
+  });
+
   // Re-run current stage from scratch
   fastify.post<{ Params: { id: string } }>('/tasks/:id/stage/rerun', async (req, reply) => {
     const task = getTask(req.params.id);
@@ -639,8 +684,14 @@ async function spawnTask(
   const config = getGlobalConfig();
   maintain(config.poolSize).catch(err => fastify.log.error(err, 'Maintain pool error'));
 
-  // 5.5 If a workflow is configured, resolve the first stage prompt and inject it.
+  // 5.5 Create initial checkpoint for workflow tasks (before any agent work)
   const taskAfterSetup = getTask(taskId)!;
+  if (taskAfterSetup.workflowName && worktreePath) {
+    const { createCheckpoint } = await import('../workflows/checkpoints.js');
+    await createCheckpoint(taskId, 'initial', worktreePath);
+  }
+
+  // 5.6 If a workflow is configured, resolve the first stage prompt and inject it.
   if (taskAfterSetup.workflowName) {
     const { getWorkflow, getStep } = await import('../db/workflows.js');
     const { resolveTemplateVars } = await import('../workers/workflow.js');

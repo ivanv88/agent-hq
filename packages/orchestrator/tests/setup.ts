@@ -129,6 +129,12 @@ vi.mock('../src/index.js', () => ({
   broadcastWsEvent: vi.fn(),
 }));
 
+vi.mock('../src/workflows/checkpoints.js', () => ({
+  createCheckpoint: vi.fn().mockResolvedValue(undefined),
+  restoreCheckpoint: vi.fn().mockResolvedValue(undefined),
+  cleanupCheckpointRefs: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../src/db/workflows.js', () => ({
   getWorkflow: vi.fn().mockReturnValue({
     name: 'test-workflow',

@@ -3,6 +3,7 @@ import { broadcastWsEvent } from '../index.js';
 import { getWorkflow, getStep } from '../db/workflows.js';
 import { launchClaude } from './agent.js';
 import { resolvePrompt } from '../workflows/variables.js';
+import { createCheckpoint } from '../workflows/checkpoints.js';
 import type { Task, WorkflowDefinition, WorkflowStageConfig } from '@lacc/shared';
 
 // ── Template variable resolution ─────────────────────────────────────────────
@@ -76,6 +77,11 @@ export async function startStage(
 ): Promise<void> {
   const wf = workflow ?? getWorkflow(task.workflowName!)!;
   if (!wf) throw new Error(`Workflow '${task.workflowName}' not found`);
+
+  // Create checkpoint before launching stage (non-fatal on failure)
+  if (task.worktreePath) {
+    await createCheckpoint(task.id, stage.id, task.worktreePath);
+  }
 
   const step = getStep(stage.step);
   if (!step) throw new Error(`Step '${stage.step}' not found`);
