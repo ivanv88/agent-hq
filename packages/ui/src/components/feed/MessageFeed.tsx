@@ -92,7 +92,7 @@ export function MessageFeed({ messages, taskId }: Props) {
     >
       <div className="flex flex-col gap-4">
         {messages.map((msg) => (
-          <FeedItem key={msg.id} message={msg} />
+          <FeedItem key={msg.id} message={msg} taskId={taskId} />
         ))}
       </div>
 
@@ -109,7 +109,7 @@ export function MessageFeed({ messages, taskId }: Props) {
   );
 }
 
-function FeedItem({ message }: { message: FeedMessage }) {
+function FeedItem({ message, taskId }: { message: FeedMessage; taskId: string }) {
   const m = message as FeedMessage & { _result?: string; _isError?: boolean };
 
   switch (m.type) {
@@ -139,6 +139,11 @@ function FeedItem({ message }: { message: FeedMessage }) {
           path={m.path}
           insertions={m.insertions}
           deletions={m.deletions}
+          onOpenFile={() => fetch(`/api/tasks/${taskId}/open-file`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: m.path }),
+          })}
         />
       );
     case 'todo_list':

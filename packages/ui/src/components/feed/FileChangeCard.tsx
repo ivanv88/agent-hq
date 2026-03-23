@@ -3,6 +3,7 @@ interface Props {
   path: string;
   insertions?: number;
   deletions?: number;
+  onOpenFile?: () => void;
 }
 
 const icons: Record<string, string> = {
@@ -11,14 +12,15 @@ const icons: Record<string, string> = {
   Edit: '✎',
 };
 
-export function FileChangeCard({ action, path, insertions, deletions }: Props) {
+export function FileChangeCard({ action, path, insertions, deletions, onOpenFile }: Props) {
   const isRead = action === 'Read';
 
   return (
     <div
-      className={`flex items-center gap-2 text-[12px] py-0.5 px-1 rounded hover:bg-surface-hover transition-colors duration-100 cursor-default ${
-        isRead ? 'text-text-ghost' : 'text-text-default'
-      }`}
+      className={`flex items-center gap-2 text-[12px] py-0.5 px-1 rounded hover:bg-surface-hover transition-colors duration-100 ${
+        onOpenFile ? 'cursor-pointer' : 'cursor-default'
+      } ${isRead ? 'text-text-ghost' : 'text-text-default'}`}
+      onClick={onOpenFile}
     >
       <span className="w-4 text-center shrink-0">{icons[action]}</span>
       <span className="font-mono truncate flex-1">{path}</span>

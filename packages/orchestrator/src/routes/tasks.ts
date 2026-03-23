@@ -491,6 +491,21 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     return { ok: true };
   });
 
+  // Open a specific file in editor
+  fastify.post<{ Params: { id: string }; Body: { filePath: string } }>('/tasks/:id/open-file', async (req, reply) => {
+    const task = getTask(req.params.id);
+    if (!task) return reply.status(404).send({ error: 'Task not found' });
+
+    const { filePath } = req.body;
+    if (!filePath) return reply.status(400).send({ error: 'filePath is required' });
+
+    const config = getGlobalConfig();
+    const { spawn } = await import('child_process');
+    spawn(config.editorCommand, [filePath], { detached: true, stdio: 'ignore' }).unref();
+
+    return { ok: true };
+  });
+
   // ── Stage control endpoints ───────────────────────────────────────────────
 
   // Continue past a manual gate (workflow_status = waiting_gate)
