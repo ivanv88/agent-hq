@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `local_agent_command_center_specs.md` — Full product spec
 - `implementation_plan.md` — Staged implementation plan
 - `build-checklist.md` — Per-stage verification checklist (✅/🔲/⚠️)
-- `verification-plan.md` — Step-by-step plan to verify all ⚠️ checklist items
+- `verification-plan.md` — Step-by-step manual verification plans per feature
 - `templates/` — Reusable prompt/task templates
 - `style-guide.md` — Design tokens, typography, colors, spacing reference. Read when building or modifying UI.
 - `ui-best-practices.md` — Detailed patterns and code examples for UI. Referenced by `.claude/rules/ui.md` (auto-loaded for `packages/ui/**`).
@@ -38,6 +38,10 @@ npx tsc --noEmit
 # Build individual packages
 npm run build --workspace=packages/ui
 npm run build --workspace=packages/orchestrator
+
+# Run tests
+cd packages/orchestrator && npx vitest run
+cd packages/ui && npx vitest run
 ```
 
 ## Architecture
@@ -75,11 +79,34 @@ Agent logs are delivered to the UI via SSE (`GET /tasks/:id/logs`). Real-time up
 `App.tsx` owns global state (selected task, modal, WS connection, session cost) and passes data down to:
 - `TopBar` — pool status, session cost, keyboard shortcut hints
 - `TaskList` — filterable list of tasks
-- `DetailPanel` — logs (xterm), diff view, action buttons for the selected task
+- `DetailPanel` — message feed, diff view, action buttons for the selected task
 - `NotificationStrip` — ephemeral banners
-- Modals: `NewTaskModal`, `FeedbackModal`, `MemoryModal`, `SettingsModal`
+- Modals: `NewTaskModal`, `MemoryModal`, `SettingsModal`
 
-Custom hooks in `src/hooks/`: `useWebSocket`, `useTasks`, `usePool`, `useKeyboardShortcuts`.
+Custom hooks in `src/hooks/`: `useWebSocket`, `useTasks`, `usePool`, `useKeyboardShortcuts`, `useTaskFeed`.
+
+## Testing
+
+### Test locations
+
+| Package | Runner | Location | Covers |
+|---------|--------|----------|--------|
+| `packages/orchestrator` | `npx vitest run` | `tests/api/` | Fastify route integration tests |
+| `packages/orchestrator` | `npx vitest run` | `tests/unit/` | DB helpers, git utils, streaming parsers, workflow engine |
+| `packages/ui` | `npx vitest run` | `tests/` | Feed parser, UI utilities |
+
+### When to write tests
+
+- **New route** → add a test in `tests/api/` covering success + key error cases (404, 400, 409)
+- **New pure logic** (parser, db helper, git util, workflow function) → add a unit test
+- **React components** → no automated test; verify manually using the verification plans in `ai-docs/`
+- **Always run the relevant package's tests after making changes** and confirm they pass before finishing
+
+### What not to test
+
+- React component rendering or DOM structure
+- External side effects (Docker, git operations, `spawn`) — mock these at the boundary
+- Behaviour already covered by TypeScript types
 
 ### Key constraints
 
