@@ -2,11 +2,13 @@
 
 Run Claude Code agents in isolated Docker containers and manage them from a web UI.
 
+Each task gets its own git worktree and container. Agents stream output in real time — text, tool calls, file changes, todos — into a live message feed. You review and approve before anything merges.
+
 ## Prerequisites
 
-- **Docker** (running)
+- **Docker daemon** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) or [Colima](https://github.com/abiosoft/colima) (running)
 - **Node.js 20+**
-- **Anthropic API key**
+- **Anthropic API key** or **Claude subscription** (Pro/Max) — one or the other is required for the Claude CLI
 - **Caddy** (optional, for dev-server proxy mode)
 
 ## First-time setup
@@ -24,6 +26,42 @@ npm run build && npm start   # production, everything on :7842
 ```
 
 Open `http://localhost:7842`.
+
+## What you can do
+
+- **Spawn tasks** — give the agent a prompt and a repo path; it runs in an isolated worktree
+- **Live feed** — watch the agent's reasoning, tool calls, file changes, and todos stream in real time
+- **Give feedback** — send mid-task messages or commands (`/pause`, `/kill`, `/restart`) without stopping the agent
+- **Review & approve** — inspect the diff before any changes land; approve, reject, or request changes
+- **Workflows** — chain multiple agent stages with automatic or manual gates between them, with checkpoints for rollback
+
+## Workflows
+
+A workflow is a YAML file that defines a sequence of stages. Each stage runs a Claude agent with its own prompt; stages can advance automatically or pause for manual review.
+
+Place workflow definitions in `ai-docs/` (or the `docsDir` configured for the repo).
+
+```yaml
+name: feature
+stages:
+  - id: plan
+    prompt: "Read the codebase and write a plan to {{workspace}}/plan.md"
+    gate: manual          # pauses for approval before continuing
+  - id: implement
+    prompt: "Implement the plan in {{workspace}}/plan.md"
+    gate: auto
+  - id: test
+    prompt: "Write and run tests. Fix any failures."
+    gate: manual
+```
+
+**Gate types:**
+- `auto` — advances immediately when the stage completes
+- `manual` — pauses and waits for you to click Continue (or `/continue` in the command box)
+
+**Variables available in prompts:** `{{workspace}}`, `{{branch}}`, `{{docs_dir}}`
+
+Checkpoints are saved at each gate so you can restore to any earlier stage.
 
 ## Per-repo configuration
 
@@ -86,3 +124,27 @@ See the [devcontainer spec](https://containers.dev/implementors/json_reference/)
 | `GATE_ON_COMPLETION` | Agent runs freely, pauses for review when done |
 | `GATE_ALWAYS` | Agent pauses for approval before every tool call |
 | `NOTIFY_ONLY` | Agent runs fully autonomously, notifies on completion |
+
+## Development
+
+### Package structure
+
+```
+packages/
+  shared/       # Zod schemas + TypeScript types shared by both packages
+  orchestrator/ # Fastify server on :7842 — Docker, SQLite, SSE, WebSocket
+  ui/           # React 19 + Tailwind v4 SPA
+```
+
+### Testing
+
+```bash
+cd packages/orchestrator && npx vitest run   # API + unit tests
+cd packages/ui && npx vitest run             # feed parser + utility tests
+```
+
+### Type-check
+
+```bash
+npx tsc --noEmit
+```
