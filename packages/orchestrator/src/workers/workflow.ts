@@ -1,16 +1,11 @@
+import fs from 'fs';
 import { getTask, updateTask } from '../db/tasks.js';
 import { broadcastWsEvent } from '../index.js';
 import { getWorkflow, getCommand } from '../db/workflows.js';
 import { launchClaude } from './agent.js';
-import { resolvePrompt } from '../workflows/variables.js';
+import { resolveStagePrompt, resolveHostPath } from '../workflows/variables.js';
 import { createCheckpoint } from '../workflows/checkpoints.js';
 import type { Task, WorkflowDefinition, WorkflowStageConfig } from '@lacc/shared';
-
-// ── Template variable resolution ─────────────────────────────────────────────
-
-export function resolveTemplateVars(template: string, task: Task, workflow: WorkflowDefinition): string {
-  return resolvePrompt(template, task, workflow);
-}
 
 // ── Stage lookup helpers ──────────────────────────────────────────────────────
 
@@ -85,6 +80,7 @@ export async function startStage(
 
   const stepDef = stage.step;
   let rawPrompt: string;
+  const freshTask = getTask(task.id)!;
   if ('command' in stepDef) {
     const cmd = getCommand(stepDef.command);
     if (!cmd) throw new Error(`Command '${stepDef.command}' not found`);
@@ -92,11 +88,14 @@ export async function startStage(
   } else if ('prompt' in stepDef) {
     rawPrompt = stepDef.prompt;
   } else {
-    throw new Error(`Stage '${stage.id}' uses file-based step — not yet supported`);
+    const hostPath = resolveHostPath(stepDef.file, freshTask.worktreePath!, wf.docsDir ?? 'ai-docs');
+    if (!fs.existsSync(hostPath)) {
+      throw new Error(`Stage '${stage.id}': file step path not found: ${hostPath}`);
+    }
+    rawPrompt = fs.readFileSync(hostPath, 'utf-8');
   }
 
-  const freshTask = getTask(task.id)!;
-  let prompt = resolveTemplateVars(rawPrompt, freshTask, wf);
+  let prompt = await resolveStagePrompt(rawPrompt, freshTask, wf);
   if (extraContext) prompt = `${prompt}\n\n---\nAdditional context:\n${extraContext}`;
 
   updateTask(task.id, {

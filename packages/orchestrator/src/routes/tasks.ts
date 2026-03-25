@@ -1,8 +1,10 @@
+import fs from 'fs';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'crypto';
 import type { Task } from '@lacc/shared';
 import { SpawnTaskInputSchema, FeedbackInputSchema } from '@lacc/shared';
 import { insertTask, updateTask, getTask, listTasks, deleteFinishedTasks } from '../db/tasks.js';
+import { getWorkflow } from '../db/workflows.js';
 import { listPrompts, upsertPrompt } from '../db/prompts.js';
 import { appendChunk, getLastNChunks } from '../db/logs.js';
 import { broadcastWsEvent } from '../index.js';
@@ -74,6 +76,14 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       template: merged.branchTemplate,
       suffix: taskId.slice(0, 6),
     });
+
+    // Workflow defaults: explicit input > workflow file > global/repo config
+    const wfDefaults = input.workflowName ? getWorkflow(input.workflowName) : null;
+    const resolvedOversightMode = input.oversightMode
+      ?? (wfDefaults?.oversight as Task['oversightMode'] | undefined)
+      ?? merged.oversightMode;
+    const resolvedModel = input.model ?? wfDefaults?.model ?? globalConfig.defaultModel;
+
     const task: Task = {
       id: taskId,
       repoPath: input.repoPath,
@@ -83,12 +93,12 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       worktreePath: null,
       containerId: undefined,
       status: 'SPAWNING',
-      oversightMode: input.oversightMode ?? merged.oversightMode,
+      oversightMode: resolvedOversightMode,
       taskType,
       devServerMode,
       devPort,
       devServerUrl: null,
-      model: input.model ?? globalConfig.defaultModel,
+      model: resolvedModel,
       agentName: input.agentName ?? null,
       skillNames: input.skillNames ?? [],
       planFirst: input.planFirst ?? false,
@@ -716,21 +726,25 @@ async function spawnTask(
 
   // 5.6 If a workflow is configured, resolve the first stage prompt and inject it.
   if (taskAfterSetup.workflowName) {
-    const { getWorkflow, getCommand } = await import('../db/workflows.js');
-    const { resolveTemplateVars } = await import('../workers/workflow.js');
+    const { getCommand } = await import('../db/workflows.js');
+    const { resolveStagePrompt, resolveHostPath } = await import('../workflows/variables.js');
     const wf = getWorkflow(taskAfterSetup.workflowName);
     if (wf) {
       const skipped = taskAfterSetup.workflowSkippedStages ?? [];
       const firstStage = wf.stages.find(s => !skipped.includes(s.id));
       if (firstStage) {
         const stepDef = firstStage.step;
-        const stepPrompt = 'command' in stepDef
-          ? getCommand(stepDef.command)?.prompt
-          : 'prompt' in stepDef
-            ? stepDef.prompt
-            : undefined;
-        if (stepPrompt) {
-          const stagePrompt = resolveTemplateVars(stepPrompt, taskAfterSetup, wf);
+        let rawPrompt: string | undefined;
+        if ('command' in stepDef) {
+          rawPrompt = getCommand(stepDef.command)?.prompt;
+        } else if ('prompt' in stepDef) {
+          rawPrompt = stepDef.prompt;
+        } else {
+          const hostPath = resolveHostPath(stepDef.file, worktreePath, wf.docsDir ?? 'ai-docs');
+          if (fs.existsSync(hostPath)) rawPrompt = fs.readFileSync(hostPath, 'utf-8');
+        }
+        if (rawPrompt) {
+          const stagePrompt = await resolveStagePrompt(rawPrompt, taskAfterSetup, wf);
           const userContext = task.prompt?.trim();
           const combinedPrompt = userContext
             ? `${stagePrompt}\n\n---\nAdditional context from user:\n${userContext}`
