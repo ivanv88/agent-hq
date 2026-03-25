@@ -166,7 +166,7 @@ function AppShell() {
           <Route path="/tasks" element={null} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/kanban" element={<KanbanPage />} />
-          <Route path="/library" element={<LibraryPage />} />
+          <Route path="/library" element={<LibraryPage activeRepo={activeRepo} />} />
           <Route path="/settings" element={<SettingsPage config={config} configLoading={configLoading} onSave={saveConfig} />} />
         </Routes>
       </div>

@@ -23,7 +23,11 @@ const TABS = [
   { id: 'commands', label: 'Commands' },
 ];
 
-export function LibraryPage() {
+interface LibraryPageProps {
+  activeRepo?: string | null;
+}
+
+export function LibraryPage({ activeRepo }: LibraryPageProps) {
   const [tab, setTab] = useState<TabId>('library');
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
 
@@ -46,7 +50,10 @@ export function LibraryPage() {
       <div className="flex-1 min-h-0 flex flex-col px-6">
         {tab === 'library' && <LibraryTab refreshKey={libraryRefreshKey} />}
         {tab === 'workbench' && (
-          <WorkbenchTab onAfterSend={() => setLibraryRefreshKey(k => k + 1)} />
+          <WorkbenchTab
+            activeRepo={activeRepo}
+            onAfterSend={() => setLibraryRefreshKey(k => k + 1)}
+          />
         )}
         {tab === 'workflows' && <WorkflowsTab />}
         {tab === 'commands' && <CommandsTab />}
@@ -102,7 +109,7 @@ function LibraryTab({ refreshKey }: { refreshKey: number }) {
       <div className="w-48 shrink-0 overflow-y-auto rounded border border-border-default bg-surface-base">
         {total === 0 && (
           <div className="text-[12px] text-text-ghost p-3">
-            No skills or agents found in ~/.claude/
+            No skills or agents found in ~/.lacc-data/.claude/
           </div>
         )}
         {skills.length > 0 && (
@@ -167,7 +174,7 @@ function LibraryTab({ refreshKey }: { refreshKey: number }) {
 
 // ─── Workbench Tab ─────────────────────────────────────────────────────────────
 
-function WorkbenchTab({ onAfterSend }: { onAfterSend?: () => void }) {
+function WorkbenchTab({ activeRepo, onAfterSend }: { activeRepo?: string | null; onAfterSend?: () => void }) {
   const [history, setHistory] = useState<MetaMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -198,7 +205,7 @@ function WorkbenchTab({ onAfterSend }: { onAfterSend?: () => void }) {
       const res = await fetch('/meta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: msg, repoPath: activeRepo ?? undefined }),
       });
       const data = (await res.json()) as { response: string };
       const assistantMsg: MetaMessage = {

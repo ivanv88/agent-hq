@@ -41,6 +41,10 @@ vi.mock('../src/containers/lifecycle.js', () => ({
   watchExecUntilDone: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../src/meta/subprocess.js', () => ({
+  subprocess: { spawn: vi.fn() },
+}));
+
 vi.mock('../src/git/worktree.js', () => ({
   createWorktree: vi.fn().mockResolvedValue('/tmp/test-worktree'),
   getDiff: vi.fn().mockResolvedValue({

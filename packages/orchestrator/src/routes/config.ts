@@ -10,7 +10,7 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
-const CLAUDE_DIR = path.join(os.homedir(), '.claude');
+const CLAUDE_DIR = path.join(os.homedir(), '.lacc-data', '.claude');
 const isMarkdownOrText = (f: string) => f.endsWith('.md') || f.endsWith('.txt');
 
 export function registerConfigRoutes(fastify: FastifyInstance) {

@@ -40,6 +40,9 @@ async function main() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(path.join(DATA_DIR, 'worktrees'), { recursive: true });
   fs.mkdirSync(path.join(DATA_DIR, 'certs'), { recursive: true });
+  fs.mkdirSync(path.join(DATA_DIR, '.claude', 'skills'), { recursive: true });
+  fs.mkdirSync(path.join(DATA_DIR, '.claude', 'agents'), { recursive: true });
+  fs.mkdirSync(path.join(DATA_DIR, 'system-prompts'), { recursive: true });
 
   if (!fs.existsSync(CONFIG_PATH)) {
     const defaults = {
@@ -56,6 +59,29 @@ async function main() {
     };
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(defaults, null, 2));
   }
+  // Copy starter skills (skip if already exist so user edits are preserved)
+  const DEFAULTS_DIR = path.join(__dirname, 'defaults');
+  const STARTER_SKILLS = ['lacc-conventions.md', 'create-step.md', 'create-workflow.md', 'create-agent.md'];
+  const skillsDir = path.join(DATA_DIR, '.claude', 'skills');
+  for (const filename of STARTER_SKILLS) {
+    const dest = path.join(skillsDir, filename);
+    if (!fs.existsSync(dest)) {
+      fs.copyFileSync(path.join(DEFAULTS_DIR, 'skills', filename), dest);
+      console.log(`  Created ${dest}`);
+    }
+  }
+
+  // Copy default system prompts (skip if already exist)
+  const STARTER_PROMPTS = ['library-workbench.md'];
+  const promptsDir = path.join(DATA_DIR, 'system-prompts');
+  for (const filename of STARTER_PROMPTS) {
+    const dest = path.join(promptsDir, filename);
+    if (!fs.existsSync(dest)) {
+      fs.copyFileSync(path.join(DEFAULTS_DIR, 'system-prompts', filename), dest);
+      console.log(`  Created ${dest}`);
+    }
+  }
+
   console.log('✓ Directories and config created\n');
 
   // Step 3: Check Docker / Colima
