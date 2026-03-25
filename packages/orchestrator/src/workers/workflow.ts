@@ -1,6 +1,6 @@
 import { getTask, updateTask } from '../db/tasks.js';
 import { broadcastWsEvent } from '../index.js';
-import { getWorkflow, getStep } from '../db/workflows.js';
+import { getWorkflow, getCommand } from '../db/workflows.js';
 import { launchClaude } from './agent.js';
 import { resolvePrompt } from '../workflows/variables.js';
 import { createCheckpoint } from '../workflows/checkpoints.js';
@@ -83,11 +83,20 @@ export async function startStage(
     await createCheckpoint(task.id, stage.id, task.worktreePath);
   }
 
-  const step = getStep(stage.step);
-  if (!step) throw new Error(`Step '${stage.step}' not found`);
+  const stepDef = stage.step;
+  let rawPrompt: string;
+  if ('command' in stepDef) {
+    const cmd = getCommand(stepDef.command);
+    if (!cmd) throw new Error(`Command '${stepDef.command}' not found`);
+    rawPrompt = cmd.prompt;
+  } else if ('prompt' in stepDef) {
+    rawPrompt = stepDef.prompt;
+  } else {
+    throw new Error(`Stage '${stage.id}' uses file-based step — not yet supported`);
+  }
 
   const freshTask = getTask(task.id)!;
-  let prompt = resolveTemplateVars(step.prompt, freshTask, wf);
+  let prompt = resolveTemplateVars(rawPrompt, freshTask, wf);
   if (extraContext) prompt = `${prompt}\n\n---\nAdditional context:\n${extraContext}`;
 
   updateTask(task.id, {

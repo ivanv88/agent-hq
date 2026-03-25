@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import type { WorkflowDefinition, WorkflowStageConfig, StepDefinition } from '@lacc/shared';
+import type { WorkflowDefinition, WorkflowStageConfig, CommandDefinition } from '@lacc/shared';
 import { Button } from './ui/Button.js';
 import { Input } from './ui/Input.js';
 
 interface Props {
   workflow: WorkflowDefinition | null;  // null = new workflow
-  steps: StepDefinition[];
+  commands: CommandDefinition[];
   onSave: (workflow: WorkflowDefinition) => Promise<void>;
   onDelete?: (name: string) => Promise<void>;
   onCancel: () => void;
@@ -20,13 +20,13 @@ const labelCls = 'text-[11px] text-text-ghost uppercase tracking-[0.1em] mb-1 bl
 
 function StageRow({
   stage,
-  steps,
+  commands,
   onUpdate,
   onRemove,
   idx,
 }: {
   stage: WorkflowStageConfig;
-  steps: StepDefinition[];
+  commands: CommandDefinition[];
   onUpdate: (s: WorkflowStageConfig) => void;
   onRemove: () => void;
   idx: number;
@@ -41,7 +41,7 @@ function StageRow({
       >
         <span className="text-text-ghost text-xs w-5">{idx + 1}</span>
         <span className="text-text-body text-sm flex-1">{stage.name || stage.id}</span>
-        <span className="text-text-ghost text-xs">{stage.step}</span>
+        <span className="text-text-ghost text-xs">{'command' in stage.step ? stage.step.command : 'file' in stage.step ? stage.step.file : 'inline'}</span>
         <span className="text-text-ghost text-xs ml-2">{stage.gate}</span>
         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onRemove(); }}
           style={{ padding: '2px 8px', fontSize: 11 }}>×</Button>
@@ -61,13 +61,13 @@ function StageRow({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className={labelCls}>Step</label>
+              <label className={labelCls}>Command</label>
               <select
-                value={stage.step}
-                onChange={e => onUpdate({ ...stage, step: e.target.value })}
+                value={'command' in stage.step ? stage.step.command : ''}
+                onChange={e => onUpdate({ ...stage, step: { command: e.target.value } })}
                 className="w-full bg-surface-base border border-border-default rounded px-2 py-1.5 text-sm text-text-body"
               >
-                {steps.map(s => <option key={s.filename} value={s.filename}>{s.filename}</option>)}
+                {commands.map(c => <option key={c.filename} value={c.filename}>{c.filename}</option>)}
                 <option value="">-- custom --</option>
               </select>
             </div>
@@ -100,7 +100,7 @@ function StageRow({
   );
 }
 
-export function WorkflowEditor({ workflow, steps, onSave, onDelete, onCancel }: Props) {
+export function WorkflowEditor({ workflow, commands, onSave, onDelete, onCancel }: Props) {
   const isNew = !workflow;
   const [name, setName] = useState(workflow?.name ?? '');
   const [description, setDescription] = useState(workflow?.description ?? '');
@@ -112,7 +112,7 @@ export function WorkflowEditor({ workflow, steps, onSave, onDelete, onCancel }: 
     setStages(prev => [...prev, {
       id: `stage${prev.length + 1}`,
       name: `Stage ${prev.length + 1}`,
-      step: steps[0]?.filename ?? '',
+      step: { command: commands[0]?.filename ?? '' },
       gate: 'manual',
       optional: false,
       canLoop: false,
@@ -169,9 +169,9 @@ export function WorkflowEditor({ workflow, steps, onSave, onDelete, onCancel }: 
             <StageRow
               key={stage.id + idx}
               stage={stage}
-              steps={steps}
+              commands={commands}
               idx={idx}
-              onUpdate={updated => setStages(prev => prev.map((s, i) => i === idx ? updated : s))}
+              onUpdate={(updated: WorkflowStageConfig) => setStages(prev => prev.map((s, i) => i === idx ? updated : s))}
               onRemove={() => setStages(prev => prev.filter((_, i) => i !== idx))}
             />
           ))}

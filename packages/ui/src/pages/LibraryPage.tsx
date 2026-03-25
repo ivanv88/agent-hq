@@ -5,8 +5,8 @@ import { Tabs } from '../components/ui/Tabs.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import type { MetaMessage } from '@lacc/shared';
 import { WorkflowEditor } from '../components/WorkflowEditor.js';
-import { StepEditor } from '../components/StepEditor.js';
-import type { WorkflowDefinition, StepDefinition } from '@lacc/shared';
+import { CommandEditor } from '../components/CommandEditor.js';
+import type { WorkflowDefinition, CommandDefinition } from '@lacc/shared';
 
 interface SkillOrAgent {
   name: string;
@@ -14,13 +14,13 @@ interface SkillOrAgent {
   content: string;
 }
 
-type TabId = 'library' | 'workbench' | 'workflows' | 'steps';
+type TabId = 'library' | 'workbench' | 'workflows' | 'commands';
 
 const TABS = [
   { id: 'library', label: 'Library' },
   { id: 'workbench', label: 'Workbench' },
   { id: 'workflows', label: 'Workflows' },
-  { id: 'steps', label: 'Steps' },
+  { id: 'commands', label: 'Commands' },
 ];
 
 export function LibraryPage() {
@@ -49,7 +49,7 @@ export function LibraryPage() {
           <WorkbenchTab onAfterSend={() => setLibraryRefreshKey(k => k + 1)} />
         )}
         {tab === 'workflows' && <WorkflowsTab />}
-        {tab === 'steps' && <StepsTab />}
+        {tab === 'commands' && <CommandsTab />}
       </div>
     </div>
   );
@@ -305,16 +305,16 @@ function WorkbenchTab({ onAfterSend }: { onAfterSend?: () => void }) {
 
 function WorkflowsTab() {
   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
-  const [steps, setSteps] = useState<StepDefinition[]>([]);
+  const [commands, setCommands] = useState<CommandDefinition[]>([]);
   const [selected, setSelected] = useState<WorkflowDefinition | null | 'new'>(null);
 
   const load = () => {
     Promise.all([
       fetch('/workflows').then(r => r.json()),
-      fetch('/steps').then(r => r.json()),
-    ]).then(([wfs, sts]) => {
+      fetch('/commands').then(r => r.json()),
+    ]).then(([wfs, cmds]) => {
       setWorkflows(wfs as WorkflowDefinition[]);
-      setSteps(sts as StepDefinition[]);
+      setCommands(cmds as CommandDefinition[]);
     }).catch(console.error);
   };
 
@@ -324,7 +324,7 @@ function WorkflowsTab() {
     return (
       <WorkflowEditor
         workflow={selected === 'new' ? null : selected}
-        steps={steps}
+        commands={commands}
         onSave={async (wf) => {
           const isNew = selected === 'new';
           await fetch(isNew ? '/workflows' : `/workflows/${wf.name}`, {
@@ -371,34 +371,34 @@ function WorkflowsTab() {
   );
 }
 
-// ─── Steps Tab ───────────────────────────────────────────────────────────────
+// ─── Commands Tab ────────────────────────────────────────────────────────────
 
-function StepsTab() {
-  const [steps, setSteps] = useState<StepDefinition[]>([]);
-  const [selected, setSelected] = useState<StepDefinition | null | 'new'>(null);
+function CommandsTab() {
+  const [commands, setCommands] = useState<CommandDefinition[]>([]);
+  const [selected, setSelected] = useState<CommandDefinition | null | 'new'>(null);
 
   const load = () => {
-    fetch('/steps').then(r => r.json()).then(setSteps).catch(console.error);
+    fetch('/commands').then(r => r.json()).then(setCommands).catch(console.error);
   };
 
   useEffect(() => { load(); }, []);
 
   if (selected !== null) {
     return (
-      <StepEditor
-        step={selected === 'new' ? null : selected}
-        onSave={async (step) => {
+      <CommandEditor
+        command={selected === 'new' ? null : selected}
+        onSave={async (cmd) => {
           const isNew = selected === 'new';
-          await fetch(isNew ? '/steps' : `/steps/${step.filename}`, {
+          await fetch(isNew ? '/commands' : `/commands/${cmd.filename}`, {
             method: isNew ? 'POST' : 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(step),
+            body: JSON.stringify(cmd),
           });
           load();
           setSelected(null);
         }}
         onDelete={async (name) => {
-          await fetch(`/steps/${name}`, { method: 'DELETE' });
+          await fetch(`/commands/${name}`, { method: 'DELETE' });
           load();
           setSelected(null);
         }}
@@ -410,23 +410,23 @@ function StepsTab() {
   return (
     <div className="flex flex-col gap-3 py-4">
       <div className="flex items-center justify-between">
-        <span className="text-text-ghost text-xs uppercase tracking-widest">Steps</span>
+        <span className="text-text-ghost text-xs uppercase tracking-widest">Commands</span>
         <Button variant="ghost" size="sm" onClick={() => setSelected('new')}>+ New</Button>
       </div>
-      {steps.length === 0 && (
+      {commands.length === 0 && (
         <div className="text-text-ghost text-sm text-center py-8">
-          No steps yet. Click + New to create one.
+          No commands yet. Click + New to create one.
         </div>
       )}
-      {steps.map(step => (
+      {commands.map(cmd => (
         <div
-          key={step.filename}
+          key={cmd.filename}
           className="flex items-center gap-3 px-3 py-2.5 rounded border border-border-default cursor-pointer hover:bg-surface-inset transition-colors duration-100"
-          onClick={() => setSelected(step)}
+          onClick={() => setSelected(cmd)}
         >
-          <span className="text-text-body text-sm flex-1">{step.name}</span>
-          <span className="text-text-ghost text-xs font-mono">{step.filename}</span>
-          <span className="text-text-ghost text-xs">{step.description}</span>
+          <span className="text-text-body text-sm flex-1">{cmd.name}</span>
+          <span className="text-text-ghost text-xs font-mono">{cmd.filename}</span>
+          <span className="text-text-ghost text-xs">{cmd.description}</span>
         </div>
       ))}
     </div>

@@ -143,22 +143,22 @@ vi.mock('../src/db/workflows.js', () => ({
     description: 'Test workflow',
     docsDir: 'ai-docs',
     stages: [
-      { id: 'stage-1', name: 'Stage 1', step: 'stage-1-step', gate: 'auto', optional: false, canLoop: false },
-      { id: 'stage-2', name: 'Stage 2', step: 'stage-2-step', gate: 'manual', optional: true, canLoop: false },
-      { id: 'stage-3', name: 'Stage 3', step: 'stage-3-step', gate: 'auto', optional: false, canLoop: false },
+      { id: 'stage-1', name: 'Stage 1', step: { command: 'stage-1-step' }, gate: 'auto', optional: false, canLoop: false },
+      { id: 'stage-2', name: 'Stage 2', step: { command: 'stage-2-step' }, gate: 'manual', optional: true, canLoop: false },
+      { id: 'stage-3', name: 'Stage 3', step: { command: 'stage-3-step' }, gate: 'auto', optional: false, canLoop: false },
     ],
   }),
-  getStep: vi.fn().mockReturnValue({
-    name: 'test-step',
-    filename: 'test-step',
-    description: 'Test step',
+  getCommand: vi.fn().mockReturnValue({
+    name: 'test-command',
+    filename: 'test-command',
+    description: 'Test command',
     reads: [],
     writes: [],
     promptUser: false,
     prompt: 'Test stage prompt for {{branch}}',
   }),
   listWorkflows: vi.fn().mockReturnValue([]),
-  listSteps: vi.fn().mockReturnValue([]),
+  listCommands: vi.fn().mockReturnValue([]),
 }));
 
 // ── Mock helpers ──────────────────────────────────────────────────────────────

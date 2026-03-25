@@ -150,10 +150,16 @@ export interface SpawnTaskInput {
 
 // ── Workflow types ────────────────────────────────────────────────────────
 
+// What a workflow stage executes — discriminated union by key
+export type StepDefinition =
+  | { command: string }   // references a command file by name (Claude Code convention)
+  | { file: string }      // any .md path — template vars resolved, used as prompt
+  | { prompt: string };   // inline prompt string
+
 export interface WorkflowStageConfig {
   id: string;
   name: string;
-  step: string;           // filename stem in ~/.lacc-data/steps/
+  step: StepDefinition;   // what this stage runs
   gate: WorkflowGate;
   optional: boolean;
   canLoop: boolean;
@@ -169,6 +175,8 @@ export interface WorkflowDefinition {
   version: number;
   description: string;
   docsDir: string;        // default: 'ai-docs'
+  model?: string;         // default model for all stages
+  oversight?: string;     // default oversight mode
   tools?: {
     skills?: string[];
     agents?: string[];
@@ -177,16 +185,24 @@ export interface WorkflowDefinition {
   stages: WorkflowStageConfig[];
 }
 
-export interface StepDefinition {
+// Command file format — Claude Code .claude/commands/ files with LACC extensions
+export interface CommandDefinition {
   name: string;
   filename: string;       // stem, e.g. 'spec-from-jira'
   description: string;
   reads: string[];
   writes: string[];
   promptUser: boolean;
+  depends?: {
+    agents?: string[];
+    skills?: string[];
+    commands?: string[];  // informational only in v1
+  };
   tools?: {
     skills?: string[];
     agents?: string[];
+    allow?: string[];     // --allowedTools
+    deny?: string[];      // --disallowedTools
   };
   prompt: string;         // full prompt body (below frontmatter)
 }

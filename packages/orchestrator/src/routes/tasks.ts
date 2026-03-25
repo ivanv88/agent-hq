@@ -716,16 +716,21 @@ async function spawnTask(
 
   // 5.6 If a workflow is configured, resolve the first stage prompt and inject it.
   if (taskAfterSetup.workflowName) {
-    const { getWorkflow, getStep } = await import('../db/workflows.js');
+    const { getWorkflow, getCommand } = await import('../db/workflows.js');
     const { resolveTemplateVars } = await import('../workers/workflow.js');
     const wf = getWorkflow(taskAfterSetup.workflowName);
     if (wf) {
       const skipped = taskAfterSetup.workflowSkippedStages ?? [];
       const firstStage = wf.stages.find(s => !skipped.includes(s.id));
       if (firstStage) {
-        const step = getStep(firstStage.step);
-        if (step) {
-          const stagePrompt = resolveTemplateVars(step.prompt, taskAfterSetup, wf);
+        const stepDef = firstStage.step;
+        const stepPrompt = 'command' in stepDef
+          ? getCommand(stepDef.command)?.prompt
+          : 'prompt' in stepDef
+            ? stepDef.prompt
+            : undefined;
+        if (stepPrompt) {
+          const stagePrompt = resolveTemplateVars(stepPrompt, taskAfterSetup, wf);
           const userContext = task.prompt?.trim();
           const combinedPrompt = userContext
             ? `${stagePrompt}\n\n---\nAdditional context from user:\n${userContext}`

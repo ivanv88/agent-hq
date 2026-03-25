@@ -1,34 +1,34 @@
 import type { FastifyInstance } from 'fastify';
-import { listSteps, getStep, saveStep, deleteStep, listWorkflows, getWorkflow, saveWorkflow, deleteWorkflow } from '../db/workflows.js';
+import { listCommands, getCommand, saveCommand, deleteCommand, listWorkflows, getWorkflow, saveWorkflow, deleteWorkflow } from '../db/workflows.js';
 
 export function registerWorkflowRoutes(fastify: FastifyInstance) {
 
-  // ── Steps ────────────────────────────────────────────────────────────────
+  // ── Commands ──────────────────────────────────────────────────────────────
 
-  fastify.get('/steps', async () => listSteps());
+  fastify.get('/commands', async () => listCommands());
 
-  fastify.get<{ Params: { name: string } }>('/steps/:name', async (req, reply) => {
-    const step = getStep(req.params.name);
-    if (!step) return reply.status(404).send({ error: 'Step not found' });
-    return step;
+  fastify.get<{ Params: { name: string } }>('/commands/:name', async (req, reply) => {
+    const cmd = getCommand(req.params.name);
+    if (!cmd) return reply.status(404).send({ error: 'Command not found' });
+    return cmd;
   });
 
-  fastify.post<{ Body: unknown }>('/steps', async (req, reply) => {
-    const step = req.body as import('@lacc/shared').StepDefinition;
-    if (!step?.filename) return reply.status(400).send({ error: 'filename required' });
-    saveStep(step.filename, step);
+  fastify.post<{ Body: unknown }>('/commands', async (req, reply) => {
+    const cmd = req.body as import('@lacc/shared').CommandDefinition;
+    if (!cmd?.filename) return reply.status(400).send({ error: 'filename required' });
+    saveCommand(cmd.filename, cmd);
     return { ok: true };
   });
 
-  fastify.put<{ Params: { name: string }; Body: unknown }>('/steps/:name', async (req, reply) => {
-    const step = req.body as import('@lacc/shared').StepDefinition;
-    saveStep(req.params.name, step);
+  fastify.put<{ Params: { name: string }; Body: unknown }>('/commands/:name', async (req, reply) => {
+    const cmd = req.body as import('@lacc/shared').CommandDefinition;
+    saveCommand(req.params.name, cmd);
     return { ok: true };
   });
 
-  fastify.delete<{ Params: { name: string } }>('/steps/:name', async (req, reply) => {
-    const deleted = deleteStep(req.params.name);
-    if (!deleted) return reply.status(404).send({ error: 'Step not found' });
+  fastify.delete<{ Params: { name: string } }>('/commands/:name', async (req, reply) => {
+    const deleted = deleteCommand(req.params.name);
+    if (!deleted) return reply.status(404).send({ error: 'Command not found' });
     return { ok: true };
   });
 

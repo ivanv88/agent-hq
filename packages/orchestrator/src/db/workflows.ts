@@ -2,19 +2,19 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { DATA_DIR } from './init.js';
-import type { StepDefinition, WorkflowDefinition } from '@lacc/shared';
+import type { CommandDefinition, WorkflowDefinition } from '@lacc/shared';
 
-const STEPS_DIR = path.join(DATA_DIR, 'steps');
+const COMMANDS_DIR = path.join(DATA_DIR, '.claude', 'commands');
 const WORKFLOWS_DIR = path.join(DATA_DIR, 'workflows');
 
 function ensureDirs() {
-  fs.mkdirSync(STEPS_DIR, { recursive: true });
+  fs.mkdirSync(COMMANDS_DIR, { recursive: true });
   fs.mkdirSync(WORKFLOWS_DIR, { recursive: true });
 }
 
-// ── Steps ────────────────────────────────────────────────────────────────────
+// ── Commands ──────────────────────────────────────────────────────────────────
 
-function parseStepFile(filename: string, content: string): StepDefinition {
+function parseCommandFile(filename: string, content: string): CommandDefinition {
   const parts = content.split(/^---\s*$/m);
   // parts[0] is empty (file starts with ---), parts[1] is frontmatter, parts[2]+ is body
   const frontmatterRaw = parts.length >= 3 ? parts[1] : '';
@@ -27,47 +27,49 @@ function parseStepFile(filename: string, content: string): StepDefinition {
     description: (fm.description as string) ?? '',
     reads: (fm.reads as string[]) ?? [],
     writes: (fm.writes as string[]) ?? [],
-    promptUser: Boolean(fm.prompt_user),
-    tools: fm.tools as StepDefinition['tools'],
+    promptUser: Boolean(fm.promptUser),
+    depends: fm.depends as CommandDefinition['depends'],
+    tools: fm.tools as CommandDefinition['tools'],
     prompt: promptBody,
   };
 }
 
-function serializeStepFile(step: StepDefinition): string {
+function serializeCommandFile(cmd: CommandDefinition): string {
   const fm: Record<string, unknown> = {
-    name: step.name,
-    description: step.description,
-    reads: step.reads,
-    writes: step.writes,
+    name: cmd.name,
+    description: cmd.description,
+    reads: cmd.reads,
+    writes: cmd.writes,
   };
-  if (step.promptUser) fm.prompt_user = true;
-  if (step.tools) fm.tools = step.tools;
-  return `---\n${yaml.dump(fm).trim()}\n---\n\n${step.prompt}\n`;
+  if (cmd.promptUser) fm.promptUser = true;
+  if (cmd.depends) fm.depends = cmd.depends;
+  if (cmd.tools) fm.tools = cmd.tools;
+  return `---\n${yaml.dump(fm).trim()}\n---\n\n${cmd.prompt}\n`;
 }
 
-export function listSteps(): StepDefinition[] {
+export function listCommands(): CommandDefinition[] {
   ensureDirs();
-  const files = fs.readdirSync(STEPS_DIR).filter(f => f.endsWith('.md'));
+  const files = fs.readdirSync(COMMANDS_DIR).filter(f => f.endsWith('.md'));
   return files.map(f => {
-    const content = fs.readFileSync(path.join(STEPS_DIR, f), 'utf-8');
-    return parseStepFile(f, content);
+    const content = fs.readFileSync(path.join(COMMANDS_DIR, f), 'utf-8');
+    return parseCommandFile(f, content);
   });
 }
 
-export function getStep(name: string): StepDefinition | null {
+export function getCommand(name: string): CommandDefinition | null {
   ensureDirs();
-  const filePath = path.join(STEPS_DIR, `${name}.md`);
+  const filePath = path.join(COMMANDS_DIR, `${name}.md`);
   if (!fs.existsSync(filePath)) return null;
-  return parseStepFile(`${name}.md`, fs.readFileSync(filePath, 'utf-8'));
+  return parseCommandFile(`${name}.md`, fs.readFileSync(filePath, 'utf-8'));
 }
 
-export function saveStep(name: string, step: StepDefinition): void {
+export function saveCommand(name: string, cmd: CommandDefinition): void {
   ensureDirs();
-  fs.writeFileSync(path.join(STEPS_DIR, `${name}.md`), serializeStepFile(step), 'utf-8');
+  fs.writeFileSync(path.join(COMMANDS_DIR, `${name}.md`), serializeCommandFile(cmd), 'utf-8');
 }
 
-export function deleteStep(name: string): boolean {
-  const filePath = path.join(STEPS_DIR, `${name}.md`);
+export function deleteCommand(name: string): boolean {
+  const filePath = path.join(COMMANDS_DIR, `${name}.md`);
   if (!fs.existsSync(filePath)) return false;
   fs.unlinkSync(filePath);
   return true;

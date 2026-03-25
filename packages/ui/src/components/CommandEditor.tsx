@@ -1,23 +1,23 @@
 import { useState } from 'react';
-import type { StepDefinition } from '@lacc/shared';
+import type { CommandDefinition } from '@lacc/shared';
 import { Button } from './ui/Button.js';
 import { Input, Textarea } from './ui/Input.js';
 
 interface Props {
-  step: StepDefinition | null;   // null = new step
-  onSave: (step: StepDefinition) => Promise<void>;
+  command: CommandDefinition | null;   // null = new command
+  onSave: (command: CommandDefinition) => Promise<void>;
   onDelete?: (name: string) => Promise<void>;
   onCancel: () => void;
 }
 
-export function StepEditor({ step, onSave, onDelete, onCancel }: Props) {
-  const isNew = !step;
-  const [filename, setFilename] = useState(step?.filename ?? '');
-  const [name, setName] = useState(step?.name ?? '');
-  const [description, setDescription] = useState(step?.description ?? '');
-  const [reads, setReads] = useState<string[]>(step?.reads ?? []);
-  const [writes, setWrites] = useState<string[]>(step?.writes ?? []);
-  const [prompt, setPrompt] = useState(step?.prompt ?? '');
+export function CommandEditor({ command, onSave, onDelete, onCancel }: Props) {
+  const isNew = !command;
+  const [filename, setFilename] = useState(command?.filename ?? '');
+  const [name, setName] = useState(command?.name ?? '');
+  const [description, setDescription] = useState(command?.description ?? '');
+  const [reads, setReads] = useState<string[]>(command?.reads ?? []);
+  const [writes, setWrites] = useState<string[]>(command?.writes ?? []);
+  const [prompt, setPrompt] = useState(command?.prompt ?? '');
   const [saving, setSaving] = useState(false);
 
   const labelCls = 'text-[11px] text-text-ghost uppercase tracking-[0.1em] mb-1 block';
@@ -34,10 +34,10 @@ export function StepEditor({ step, onSave, onDelete, onCancel }: Props) {
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between">
-        <span className="text-text-bright text-sm font-medium">{isNew ? 'New Step' : step.filename}</span>
+        <span className="text-text-bright text-sm font-medium">{isNew ? 'New Command' : command.filename}</span>
         <div className="flex gap-2">
           {!isNew && onDelete && (
-            <Button variant="danger" size="sm" onClick={() => onDelete(step.filename)}>Delete</Button>
+            <Button variant="danger" size="sm" onClick={() => onDelete(command.filename)}>Delete</Button>
           )}
           <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
           <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>
@@ -50,6 +50,7 @@ export function StepEditor({ step, onSave, onDelete, onCancel }: Props) {
         <div>
           <label className={labelCls}>Filename (stem)</label>
           <Input value={filename} onChange={e => setFilename(e.target.value)} placeholder="spec-from-jira" disabled={!isNew} />
+
         </div>
         <div>
           <label className={labelCls}>Display Name</label>
@@ -59,7 +60,7 @@ export function StepEditor({ step, onSave, onDelete, onCancel }: Props) {
 
       <div>
         <label className={labelCls}>Description</label>
-        <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="What this step does..." />
+        <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="What this command does..." />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
