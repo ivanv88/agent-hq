@@ -177,10 +177,11 @@ git commit -m "feat(db): migration v5 — archive_state replaces flagged_for_del
 
 ---
 
-### Task 3: Update `tasks.ts` DB helpers for `archiveState`
+### Task 3: Update `tasks.ts` DB helpers + test factory for `archiveState`
 
 **Files:**
 - Modify: `packages/orchestrator/src/db/tasks.ts`
+- Modify: `packages/orchestrator/tests/helpers/factories.ts`
 
 - [ ] **Step 1: Update `rowToTask`**
 
@@ -212,32 +213,51 @@ with:
     archiveState: task.archiveState ?? 'alive',
 ```
 
-- [ ] **Step 3: Update `updateTask`**
+- [ ] **Step 3: Update `updateTask` fieldMap**
 
-Find the `TaskUpdate` type (or the fields the function accepts) and replace `flaggedForDelete` / `flaggedForDeleteAt` handling with `archiveState`. The update function should accept `archiveState?: ArchiveState` and write it to `archive_state`.
+`updateTask` uses a `fieldMap: Record<keyof Partial<Task>, string>` object — one entry per Task field, mapping to the DB column name. The loop at line ~154 iterates over it with parameterised queries.
 
-Locate the `updateTask` function — it uses a dynamic column builder. Add to the column map:
+In the `fieldMap` object, replace:
 ```typescript
-if (patch.archiveState !== undefined) sets.push(`archive_state = '${patch.archiveState}'`);
+    flaggedForDelete: 'flagged_for_delete',
+    flaggedForDeleteAt: 'flagged_for_delete_at',
 ```
-Remove any `flaggedForDelete` / `flaggedForDeleteAt` handling.
+with:
+```typescript
+    archiveState: 'archive_state',
+```
 
-- [ ] **Step 4: Type-check orchestrator**
+No special-case handling needed — `archiveState` is a TEXT value and the existing loop at line ~154 handles it correctly with `params[key] = val`. Also check the `switch` or special-case block below the loop (around line 159+) — it handles `skillNames`, `workflowSkippedStages`, `flaggedForDelete`, `flaggedForDeleteAt` as special serialisations. Remove the `flaggedForDelete` and `flaggedForDeleteAt` cases; `archiveState` needs no special serialisation.
+
+- [ ] **Step 4: Update `tests/helpers/factories.ts`**
+
+`createTestTask` signature is `createTestTask(overrides: Partial<Task> = {})` — one argument, no `app`. The factory hardcodes `flaggedForDelete: false, flaggedForDeleteAt: null` which will become a type error once Task 1 removes those fields from the `Task` type.
+
+Replace those two lines in the default task object:
+```typescript
+    // remove:
+    flaggedForDelete: false,
+    flaggedForDeleteAt: null,
+    // add:
+    archiveState: 'alive',
+```
+
+- [ ] **Step 5: Type-check orchestrator**
 ```bash
 cd packages/orchestrator && npx tsc --noEmit
 ```
 Fix any type errors referencing `flaggedForDelete`.
 
-- [ ] **Step 5: Run existing tests**
+- [ ] **Step 6: Run existing tests**
 ```bash
 cd packages/orchestrator && npx vitest run
 ```
 Expected: all pass
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 ```bash
-git add packages/orchestrator/src/db/tasks.ts
-git commit -m "feat(db): update tasks helpers for archiveState"
+git add packages/orchestrator/src/db/tasks.ts packages/orchestrator/tests/helpers/factories.ts
+git commit -m "feat(db): update tasks helpers and test factory for archiveState"
 ```
 
 ---
@@ -935,30 +955,28 @@ import { createTestTask } from '../helpers/factories.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
+let taskId: string;
 
 beforeEach(async () => {
   app = await buildApp();
-  createTestTask(app, { status: 'DONE', archiveState: 'alive' });
+  const task = createTestTask({ status: 'DONE', archiveState: 'alive' });
+  taskId = task.id;
 });
 
 describe('POST /tasks/:id/archive', () => {
   it('returns 400 for invalid level', async () => {
-    const tasks = await app.inject({ method: 'GET', url: '/tasks' });
-    const id = JSON.parse(tasks.body)[0].id;
     const res = await app.inject({
       method: 'POST',
-      url: `/tasks/${id}/archive`,
+      url: `/tasks/${taskId}/archive`,
       payload: { level: 'invalid' },
     });
     expect(res.statusCode).toBe(400);
   });
 
   it('archives a task (level: archived)', async () => {
-    const tasks = await app.inject({ method: 'GET', url: '/tasks' });
-    const id = JSON.parse(tasks.body)[0].id;
     const res = await app.inject({
       method: 'POST',
-      url: `/tasks/${id}/archive`,
+      url: `/tasks/${taskId}/archive`,
       payload: { level: 'archived' },
     });
     expect(res.statusCode).toBe(200);
@@ -1227,9 +1245,8 @@ let taskId: string;
 
 beforeEach(async () => {
   app = await buildApp();
-  createTestTask(app, { status: 'DONE', worktreePath: '/workspace/test' });
-  const tasks = await app.inject({ method: 'GET', url: '/tasks' });
-  taskId = JSON.parse(tasks.body)[0].id;
+  const task = createTestTask({ status: 'DONE', worktreePath: '/workspace/test' });
+  taskId = task.id;
 });
 
 describe('Git routes', () => {
@@ -1250,10 +1267,8 @@ describe('Git routes', () => {
   });
 
   it('returns 409 when task has no worktree', async () => {
-    createTestTask(app, { status: 'DONE', worktreePath: null });
-    const tasks = await app.inject({ method: 'GET', url: '/tasks' });
-    const noWorktreeId = JSON.parse(tasks.body).find((t: any) => !t.worktreePath)?.id;
-    const res = await app.inject({ method: 'POST', url: `/tasks/${noWorktreeId}/git/pull` });
+    const noWorktreeTask = createTestTask({ status: 'DONE', worktreePath: null });
+    const res = await app.inject({ method: 'POST', url: `/tasks/${noWorktreeTask.id}/git/pull` });
     expect(res.statusCode).toBe(409);
   });
 });
@@ -1324,11 +1339,12 @@ export async function registerGitRoutes(fastify: FastifyInstance): Promise<void>
 
 - [ ] **Step 4: Register routes in `index.ts`**
 
-In `packages/orchestrator/src/index.ts`, import and register:
+In `packages/orchestrator/src/index.ts`, look at how existing routes are registered — they are called directly as `registerXRoutes(fastify)`, **not** via `fastify.register()`. Add the same pattern:
+
 ```typescript
 import { registerGitRoutes } from './routes/git.js';
-// inside app setup:
-await app.register(registerGitRoutes);
+// inside the server setup block alongside other route registrations:
+registerGitRoutes(fastify);
 ```
 
 - [ ] **Step 5: Run test to verify it passes**
@@ -1507,9 +1523,8 @@ let taskId: string;
 
 beforeEach(async () => {
   app = await buildApp();
-  createTestTask(app, { status: 'DONE' });
-  const tasks = await app.inject({ method: 'GET', url: '/tasks' });
-  taskId = JSON.parse(tasks.body)[0].id;
+  const task = createTestTask({ status: 'DONE' });
+  taskId = task.id;
 });
 
 describe('Memory routes', () => {
@@ -1713,31 +1728,69 @@ git commit -m "feat(ui): add ArchiveModal component"
 **Files:**
 - Modify: `packages/ui/src/components/ActionBar.tsx`
 
-- [ ] **Step 1: Read current ActionBar**
-```bash
-cat packages/ui/src/components/ActionBar.tsx
+- [ ] **Step 1: Add new props to ActionBar interface**
+
+The current `Props` interface has: `task, onComplete, onDiscard, onFeedback, onOpenEditor, onOpenBrowser, onKill, onPause, onResume, onRestart, onMemory, onCommit, onMerge, onWorkflowContinue, onWorkflowSkip, onWorkflowRerun`.
+
+**Keep all existing props.** Add these new ones:
+```typescript
+  onSaveMemory: () => void;
+  onArchive: (level: 'archived' | 'summary' | 'deleted') => void;
+  onGitPull: () => void;
+  onGitPush: () => void;
+  onGitRebase: () => void;
+  onGitStash: () => void;
 ```
 
-- [ ] **Step 2: Restructure into three zones**
+- [ ] **Step 2: Add Git operations zone**
 
-The ActionBar should render three independent groups:
+Git ops are shown whenever `task.worktreePath` is not null, across all status branches. Add this block **inside every status branch** (WORKING, PAUSED, READY, DONE/KILLED/FAILED), immediately before the closing `</div>`:
 
-**Zone 1 — Agent controls** (shown based on `task.status`):
-- WORKING: Pause, Kill
-- PAUSED: Resume, Kill
-- READY/DONE: Restart
+```typescript
+{task.worktreePath && (
+  <>
+    <span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+    <Button variant="ghost" size="sm" onClick={onGitRebase}>Rebase</Button>
+    <Button variant="ghost" size="sm" onClick={onGitPull}>Pull</Button>
+    <Button variant="ghost" size="sm" onClick={onGitPush}>Push</Button>
+    <Button variant="ghost" size="sm" onClick={onGitStash}>Stash</Button>
+  </>
+)}
+```
 
-**Zone 2 — Git operations** (shown when `task.worktreePath` is not null, regardless of status):
-- Rebase, Pull, Push, Stash
+- [ ] **Step 3: Add lifecycle zone to terminal states**
 
-**Zone 3 — Lifecycle** (shown for terminal states: DONE, READY, KILLED, FAILED):
-- Save memory, Archive ▾ (opens ArchiveModal)
+In the final `return` block (DONE / KILLED / FAILED), add after the existing Commit/Merge buttons:
+```typescript
+<span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+<Button variant="ghost" size="sm" onClick={onSaveMemory}>Save memory</Button>
+<Button variant="ghost" size="sm" onClick={() => setShowArchive(true)}>Archive ▾</Button>
+```
 
-Each zone is separated visually with a divider. Git ops call the new `/tasks/:id/git/*` endpoints. "Save memory" calls `POST /tasks/:id/memory-snapshot`.
+Add state for the archive modal:
+```typescript
+const [showArchive, setShowArchive] = useState(false);
+```
 
-- [ ] **Step 3: Wire up Archive button to open ArchiveModal**
+And at the bottom of the component render, before the closing tag:
+```typescript
+{showArchive && (
+  <ArchiveModal
+    task={task}
+    onConfirm={(level) => { onArchive(level); setShowArchive(false); }}
+    onClose={() => setShowArchive(false)}
+  />
+)}
+```
 
-The Archive button opens `ArchiveModal`. On confirm, call `POST /tasks/:id/archive` with the chosen level, then refresh the task.
+- [ ] **Step 4: Update `DetailPanel.tsx` to pass the new props**
+
+`DetailPanel` owns the `ActionBar` call. Add the new callbacks:
+- `onSaveMemory`: call `POST /tasks/${task.id}/memory-snapshot`, then re-fetch memory to update the memory tab
+- `onArchive`: call `POST /tasks/${task.id}/archive` with the level
+- `onGitPull/Push/Rebase/Stash`: call the respective `POST /tasks/${task.id}/git/*` endpoints and show a notification on result
+
+Also thread the new props down from `App.tsx` → `DetailPanel` → `ActionBar` as needed.
 
 - [ ] **Step 4: Type-check**
 ```bash
