@@ -96,7 +96,7 @@ Migration strategy:
   2. `<repo>/.lacc` as a JSON file (legacy format — file exists)
   3. Return `{}` (neither found)
 - Legacy JSON format is read-only supported — no writes to the old format
-- The `RepoConfig` interface gains the new fields (`commitLacc`, `defaultWorkflow`) alongside existing ones
+- The `RepoConfig` interface gains the new fields (`commitLacc`, `defaultWorkflow`) alongside all existing ones (`devServerMode`, `devPort`, `oversightMode`, `model`, `branchTemplate`, `postCreateCommand`, `proxyHostname`). No existing fields are removed.
 - Existing repos with a `.lacc` JSON file continue to work unchanged until the user explicitly inits `.lacc/`
 
 ### Repo init scaffolding
@@ -206,6 +206,8 @@ The existing `Task` type and DB schema have `flaggedForDelete` (boolean) and `fl
 - **`cleanupFlaggedWorktrees()`** in `workers/cleanup.ts`: rewritten to query `WHERE archive_state IN ('archived', 'summary', 'deleted') AND worktree_path IS NOT NULL` instead of `WHERE flagged_for_delete = 1`.
 - **All callers that set `flaggedForDelete = true`** (currently only `POST /tasks/:id/close`) are replaced by `POST /tasks/:id/archive`.
 - **`Task` type** in `packages/shared/src/types.ts`: remove `flaggedForDelete: boolean` and `flaggedForDeleteAt: Date | null`; add `archiveState: ArchiveState`.
+- **`POST /tasks/:id/close`** is removed. The `/archive` endpoint replaces it entirely. No deprecation period.
+- **`worktreeAutoDeleteHours`** is removed from `GlobalConfig`, `ConfigPatch` (in `packages/shared/src/types.ts`), and from the Settings UI. The cleanup worker no longer references it.
 
 ### `ArchiveState` type
 
@@ -330,7 +332,10 @@ Step prompts can reference previous task memory:
 
 ```
 {{archive:<taskId>}}    → inlines memory.md from that task
-{{archive:latest}}      → inlines memory.md from most recent task on same repo
+{{archive:latest}}      → inlines memory.md from the most recent task on same repo
+                          (ordered by completedAt DESC, excludes archiveState = 'deleted',
+                           falls back to createdAt DESC if completedAt is null,
+                           returns empty string if no archived tasks exist for the repo)
 ```
 
 ---
@@ -409,7 +414,7 @@ Small visual indicator per task showing retention state (`alive`, `archived`, `s
 - Worktree retention: remove auto-flagging, add `POST /tasks/:id/archive`
 - Container mounting: `taskStoragePath` bind + `/lacc-global` bind
 - `--add-dir` flags wired into `claude -p` invocation
-- Template variables (`{{task_dir}}`, `{{spec}}`, etc.)
+- New template variables only (`{{task_dir}}`, `{{task_spec}}`, `{{task_plan}}`, `{{task_review}}`, `{{memory}}`) — existing variables (`{{spec}}`, `{{plan}}`, `{{review}}`, `{{user_docs}}`) are not modified
 
 ### Phase 2 — Memory & Git ops
 - Memory snapshot generation (`POST /tasks/:id/memory-snapshot`)
