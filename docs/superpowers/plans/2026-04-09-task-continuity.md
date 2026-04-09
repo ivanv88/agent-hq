@@ -1063,7 +1063,121 @@ git commit -m "feat(routes): add POST /tasks/:id/archive, remove POST /tasks/:id
 
 ## Phase 2 — Memory & Git Operations
 
-### Task 11: Install `simple-git` + git operations wrapper
+### Task 11: `{{archive:}}` template variable
+
+**Files:**
+- Modify: `packages/orchestrator/src/workflows/variables.ts`
+- Modify: `packages/orchestrator/tests/unit/workflows/variables.test.ts`
+
+- [ ] **Step 1: Write failing tests**
+
+Add to `packages/orchestrator/tests/unit/workflows/variables.test.ts`:
+```typescript
+import { vi } from 'vitest';
+
+// Mock getTaskStoragePath for archive variable tests
+vi.mock('../../../src/storage/lacc.js', () => ({
+  getTaskStoragePath: vi.fn((repoPath: string, taskId: string) =>
+    `/tmp/lacc-test/${taskId}`
+  ),
+}));
+
+describe('resolvePrompt — {{archive:}} variables', () => {
+  it('resolves {{archive:task-abc}} to memory.md content', async () => {
+    // Write a mock memory.md
+    const fs = await import('fs');
+    fs.mkdirSync('/tmp/lacc-test/task-abc', { recursive: true });
+    fs.writeFileSync('/tmp/lacc-test/task-abc/memory.md', '# Memory for task-abc');
+
+    const { resolveStagePrompt } = await import('../../../src/workflows/variables.js');
+    const result = await resolveStagePrompt('Context: {{archive:task-abc}}', task, {} as any);
+    expect(result).toContain('# Memory for task-abc');
+  });
+
+  it('resolves {{archive:task-abc}} to empty string when memory.md missing', async () => {
+    const { resolveStagePrompt } = await import('../../../src/workflows/variables.js');
+    const result = await resolveStagePrompt('Context: {{archive:nonexistent-task}}', task, {} as any);
+    expect(result).toBe('Context: ');
+  });
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+```bash
+cd packages/orchestrator && npx vitest run tests/unit/workflows/variables.test.ts
+```
+Expected: FAIL
+
+- [ ] **Step 3: Implement `{{archive:}}` resolution in `resolveStagePrompt`**
+
+In `variables.ts`, add an async resolution step for `{{archive:}}` before the sync variable substitution. Add it inside `resolveStagePrompt`, after the `{{diff}}` block and before the final `resolvePrompt` call:
+
+```typescript
+  // 3. Resolve {{archive:<taskId>}} directives
+  const ARCHIVE_RE = /\{\{archive:([^}]+)\}\}/g;
+  const archiveMatches = [...prompt.matchAll(ARCHIVE_RE)];
+  if (archiveMatches.length > 0) {
+    const { getTaskStoragePath } = await import('../storage/lacc.js');
+    const { getDb } = await import('../db/init.js');
+
+    for (const match of archiveMatches) {
+      const [token, arg] = match;
+      const trimmed = arg.trim();
+
+      let taskId: string | null = null;
+
+      if (trimmed === 'latest') {
+        // Most recent completed task on same repo (by completedAt DESC, excluding deleted)
+        const row = getDb().prepare(
+          `SELECT id FROM tasks
+           WHERE repo_path = ?
+             AND archive_state != 'deleted'
+             AND (completed_at IS NOT NULL OR created_at IS NOT NULL)
+           ORDER BY COALESCE(completed_at, created_at) DESC
+           LIMIT 1`
+        ).get(task.repoPath) as { id: string } | undefined;
+        taskId = row?.id ?? null;
+      } else {
+        taskId = trimmed;
+      }
+
+      let memoryContent = '';
+      if (taskId) {
+        const storagePath = getTaskStoragePath(task.repoPath, taskId);
+        if (storagePath) {
+          try {
+            memoryContent = fs.readFileSync(
+              path.join(storagePath, 'memory.md'), 'utf-8'
+            );
+          } catch { /* file doesn't exist — leave empty */ }
+        }
+      }
+
+      prompt = prompt.replace(token, memoryContent);
+    }
+  }
+
+  // 4. Sync variable substitution (was step 3)
+  return resolvePrompt(prompt, task, workflow);
+```
+
+Also ensure `fs` and `path` are imported at the top of the file (they already are).
+
+- [ ] **Step 4: Run tests to verify they pass**
+```bash
+cd packages/orchestrator && npx vitest run tests/unit/workflows/variables.test.ts
+```
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+```bash
+git add packages/orchestrator/src/workflows/variables.ts packages/orchestrator/tests/unit/workflows/variables.test.ts
+git commit -m "feat(workflows): add {{archive:taskId}} and {{archive:latest}} template variables"
+```
+
+---
+
+### Task 12: Install `simple-git` + git operations wrapper
 
 **Files:**
 - Create: `packages/orchestrator/src/git/operations.ts`
@@ -1642,12 +1756,13 @@ git commit -m "fix(ui): update Task type usage for archiveState"
 
 - [ ] **Step 1: Create `packages/ui/src/modals/ArchiveModal.tsx`**
 
+Follow the pattern from `FeedbackModal.tsx` for imports — `ModalOverlay` is a separate file, `ModalHeader` and `ModalFooter` both come from `Modal.tsx`.
+
 ```typescript
 import { useState } from 'react';
 import type { Task } from '@lacc/shared';
 import { ModalOverlay } from '../components/ui/ModalOverlay.js';
-import { ModalHeader } from '../components/ui/ModalHeader.js';
-import { ModalFooter } from '../components/ui/ModalFooter.js';
+import { ModalHeader, ModalFooter } from '../components/ui/Modal.js';
 
 type ArchiveLevel = 'archived' | 'summary' | 'deleted';
 
@@ -1668,7 +1783,7 @@ export function ArchiveModal({ task, onConfirm, onClose }: Props) {
 
   return (
     <ModalOverlay onClose={onClose}>
-      <ModalHeader title="Archive task?" onClose={onClose} />
+      <ModalHeader title="Archive task?" />
 
       <div className="px-4 py-3 space-y-3">
         <p className="text-text-secondary text-sm">
@@ -1701,9 +1816,9 @@ export function ArchiveModal({ task, onConfirm, onClose }: Props) {
 
       <ModalFooter
         onCancel={onClose}
-        onConfirm={() => onConfirm(selected)}
-        confirmLabel="Confirm"
-        confirmVariant={selected === 'deleted' ? 'danger' : 'primary'}
+        onPrimary={() => onConfirm(selected)}
+        primaryLabel="Confirm"
+        primaryVariant={selected === 'deleted' ? 'danger' : 'primary'}
       />
     </ModalOverlay>
   );
