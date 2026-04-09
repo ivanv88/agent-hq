@@ -28,15 +28,29 @@ Every repo registered in LACC has a `.lacc` root. Once resolved, the rest of the
 
 Repos in global mode are identified by a **user-defined flat name**, not an auto-derived namespace. When adding a repo, the name defaults to the folder name and is editable. If it conflicts with an existing name, the user is prompted to choose a different one.
 
-A registry file maps repo paths to names:
+A registry file maps repo paths to entries:
 
 ```json
 // ~/.lacc-data/registry.json
 {
-  "/Users/ivan/code/frontend": "acme-frontend",
-  "/Users/ivan/code/my-app": "my-side-project"
+  "/Users/ivan/code/frontend": {
+    "name": "acme-frontend",
+    "remoteUrl": "git@github.com:acme-corp/frontend.git"
+  },
+  "/Users/ivan/code/my-app": {
+    "name": "my-side-project",
+    "remoteUrl": null
+  }
 }
 ```
+
+`remoteUrl` is stored for informational display and meta-Claude context only — never used as a storage key. It is updated each time the repo is opened (re-read from `git remote get-url origin`).
+
+**Registry semantics:**
+- **Add**: when user inits global mode for a repo, entry is written with the chosen name.
+- **Name conflict**: checked at write time — if `name` already exists under a different path, user is prompted.
+- **Remove**: when user deletes a repo from LACC (future UI), entry is removed. The `repos/<name>/` folder is left intact — user deletes it manually.
+- **Path changes** (e.g. repo moved on disk): LACC detects missing path at open time and prompts to re-register or update the path.
 
 Git remote URL is stored for informational context (shown in UI, passed to meta-Claude) but is never used as a storage key. This means local repos that later get a remote retain the same name without any migration.
 
@@ -67,6 +81,23 @@ commitLacc: true        # local mode only — commit .lacc/ to git
 baseBranch: main
 defaultWorkflow: null   # null = user picks at spawn time
 ```
+
+`commitLacc: true` is informational for the current iteration — it signals intent but does not trigger automatic git commits. Task artifact files are written to disk; the user commits them manually or via the existing git operations. Auto-commit behaviour is out of scope for this design.
+
+`globalLaccPath` is a new field in `GlobalConfig` (defaults to `~/.lacc-data/`). It is exposed in the Settings page alongside the existing global settings. If the user changes it, existing registry entries remain pointing to the old path — migration is manual (move the `repos/` folder, update the path in settings). This edge case is documented in the UI.
+
+### Config loader migration
+
+The existing `loadRepoConfig(repoPath)` reads `.lacc` as a **JSON file** at `<repo>/.lacc`. The new design uses `.lacc/` as a **directory** with `config.yml` inside it.
+
+Migration strategy:
+- `loadRepoConfig()` is updated to check in order:
+  1. `<repo>/.lacc/config.yml` (new YAML format — directory exists)
+  2. `<repo>/.lacc` as a JSON file (legacy format — file exists)
+  3. Return `{}` (neither found)
+- Legacy JSON format is read-only supported — no writes to the old format
+- The `RepoConfig` interface gains the new fields (`commitLacc`, `defaultWorkflow`) alongside existing ones
+- Existing repos with a `.lacc` JSON file continue to work unchanged until the user explicitly inits `.lacc/`
 
 ### Repo init scaffolding
 
@@ -136,13 +167,24 @@ This means shared repos with existing `.claude/` skills and commands (including 
 
 ### Template variables available to agents
 
+**New variables** (added by this design):
 ```
 {{task_dir}}   → /workspace/.lacc/tasks/<taskId>/
-{{spec}}       → /workspace/.lacc/tasks/<taskId>/.spec.md
-{{plan}}       → /workspace/.lacc/tasks/<taskId>/.plan.md
-{{review}}     → /workspace/.lacc/tasks/<taskId>/.review.md
+{{task_spec}}  → /workspace/.lacc/tasks/<taskId>/.spec.md
+{{task_plan}}  → /workspace/.lacc/tasks/<taskId>/.plan.md
+{{task_review}}→ /workspace/.lacc/tasks/<taskId>/.review.md
 {{memory}}     → /workspace/.lacc/tasks/<taskId>/memory.md
 ```
+
+**Existing variables** (unchanged — no breaking change):
+```
+{{spec}}       → <containerDocsDir>/.spec.md   (still resolves via docsDir)
+{{plan}}       → <containerDocsDir>/.plan.md
+{{review}}     → <containerDocsDir>/.review.md
+{{user_docs}}  → <containerDocsDir>/
+```
+
+The existing `{{spec}}`, `{{plan}}`, `{{review}}` variables continue to resolve to the `docsDir` location as before. The new `{{task_spec}}`, `{{task_plan}}`, `{{task_review}}` variables resolve to `.lacc/tasks/<taskId>/` artifacts. Existing workflows are unaffected. New workflows targeting `.lacc/` task storage use the `{{task_*}}` prefix.
 
 Substituted in step prompts before the agent receives them.
 
@@ -155,6 +197,29 @@ Substituted in step prompts before the agent receives them.
 Worktrees are never automatically flagged for deletion. All retention management is manual via the UI. The existing `worktreeAutoDeleteHours` config is removed.
 
 Containers are still cleaned up automatically when a task reaches a terminal state (they are expensive). Only the worktree (cheap disk space) is retained until the user acts.
+
+#### Migration from `flaggedForDelete`
+
+The existing `Task` type and DB schema have `flaggedForDelete` (boolean) and `flaggedForDeleteAt` (timestamp). These are replaced by `archiveState`:
+
+- **DB migration**: add `archive_state TEXT NOT NULL DEFAULT 'alive'` column to `tasks` table; drop `flagged_for_delete` and `flagged_for_delete_at` columns (or keep as dead columns for one release then remove).
+- **`cleanupFlaggedWorktrees()`** in `workers/cleanup.ts`: rewritten to query `WHERE archive_state IN ('archived', 'summary', 'deleted') AND worktree_path IS NOT NULL` instead of `WHERE flagged_for_delete = 1`.
+- **All callers that set `flaggedForDelete = true`** (currently only `POST /tasks/:id/close`) are replaced by `POST /tasks/:id/archive`.
+- **`Task` type** in `packages/shared/src/types.ts`: remove `flaggedForDelete: boolean` and `flaggedForDeleteAt: Date | null`; add `archiveState: ArchiveState`.
+
+### `ArchiveState` type
+
+```typescript
+// packages/shared/src/types.ts
+export type ArchiveState = 'alive' | 'archived' | 'summary' | 'deleted';
+```
+
+Added to the `Task` interface:
+```typescript
+archiveState: ArchiveState;   // replaces flaggedForDelete + flaggedForDeleteAt
+```
+
+`alive` is the initial state set at task creation. It cannot be selected in the archive modal — the modal only offers transitions away from `alive`. `POST /tasks/:id/archive` accepts `{ level: 'archived' | 'summary' | 'deleted' }` only.
 
 ### Four retention levels
 
