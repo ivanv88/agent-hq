@@ -95,6 +95,8 @@ async function start() {
   registerPoolRoutes(fastify);
   const { registerWorkflowRoutes } = await import('./routes/workflows.js');
   registerWorkflowRoutes(fastify);
+  const { registerGitRoutes } = await import('./routes/git.js');
+  registerGitRoutes(fastify);
 
   // SPA fallback for non-API routes
   fastify.setNotFoundHandler(async (req, reply) => {
