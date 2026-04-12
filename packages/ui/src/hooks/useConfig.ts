@@ -4,7 +4,7 @@ export interface Config {
   poolSize: number;
   costAlertThreshold: number;
   spinDetectionWindowMin: number;
-  worktreeAutoDeleteHours: number;
+  globalLaccPath: string;
   editorCommand: string;
   defaultModel: string;
   defaultOversightMode: string;

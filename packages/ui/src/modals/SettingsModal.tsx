@@ -11,7 +11,7 @@ interface Config {
   poolSize: number;
   costAlertThreshold: number;
   spinDetectionWindowMin: number;
-  worktreeAutoDeleteHours: number;
+  globalLaccPath: string;
   editorCommand: string;
   defaultModel: string;
   defaultOversightMode: string;
@@ -111,10 +111,10 @@ function SettingsTab({ onClose }: { onClose: () => void }) {
               onChange={e => setConfig(c => c ? { ...c, spinDetectionWindowMin: Number(e.target.value) } : c)}
             />
             <FormField
-              label="Auto-delete (hours)"
-              type="number"
-              value={config.worktreeAutoDeleteHours}
-              onChange={e => setConfig(c => c ? { ...c, worktreeAutoDeleteHours: Number(e.target.value) } : c)}
+              label="Global .lacc path"
+              value={config.globalLaccPath}
+              onChange={e => setConfig(c => c ? { ...c, globalLaccPath: e.target.value } : c)}
+              placeholder="~/.lacc-data"
             />
             <FormField
               label="Editor command"

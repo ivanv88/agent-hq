@@ -71,10 +71,10 @@ export function SettingsPage({ config: serverConfig, configLoading, onSave }: Pr
                     onChange={e => setDraft(c => c ? { ...c, spinDetectionWindowMin: Number(e.target.value) } : c)}
                   />
                   <FormField
-                    label="Auto-delete (hours)"
-                    type="number"
-                    value={draft.worktreeAutoDeleteHours}
-                    onChange={e => setDraft(c => c ? { ...c, worktreeAutoDeleteHours: Number(e.target.value) } : c)}
+                    label="Global .lacc path"
+                    value={draft.globalLaccPath}
+                    onChange={e => setDraft(c => c ? { ...c, globalLaccPath: e.target.value } : c)}
+                    placeholder="~/.lacc-data"
                   />
                   <FormField
                     label="Editor command"

@@ -118,16 +118,23 @@ function TaskRow({ task, selected, onClick }: { task: Task; selected: boolean; o
           : task.prompt}
       </div>
 
-      {/* Bottom row: branch + cost */}
+      {/* Bottom row: branch + cost + archive state */}
       <div className="flex items-center justify-between">
         <span className="truncate max-w-[140px] text-xs font-mono text-text-muted">
           {branchDisplay}
         </span>
-        {task.costUsd > 0 && (
-          <span className={`text-xs ${task.costUsd > 4 ? 'text-status-spinning' : 'text-accent-subtle'}`}>
-            ${task.costUsd.toFixed(2)}
-          </span>
-        )}
+        <div className="flex items-center gap-1">
+          {task.archiveState !== 'alive' && (
+            <span className="text-xs text-text-muted">
+              {task.archiveState === 'archived' ? 'archived' : task.archiveState === 'summary' ? 'summary' : ''}
+            </span>
+          )}
+          {task.costUsd > 0 && (
+            <span className={`text-xs ${task.costUsd > 4 ? 'text-status-spinning' : 'text-accent-subtle'}`}>
+              ${task.costUsd.toFixed(2)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Context progress bar — only shown at >70% */}
