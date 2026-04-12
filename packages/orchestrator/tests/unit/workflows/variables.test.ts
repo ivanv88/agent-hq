@@ -211,6 +211,65 @@ describe('resolveStagePrompt', () => {
   });
 });
 
+// ── resolveStagePrompt — {{archive:}} variables ───────────────────────────────
+
+describe('resolveStagePrompt — {{archive:}} variables', () => {
+  let tmpRepo: string;
+
+  beforeEach(() => {
+    tmpRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'lacc-archive-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpRepo, { recursive: true, force: true });
+  });
+
+  it('resolves {{archive:task-myid}} to memory.md content when file exists', async () => {
+    // Create a local .lacc dir with a task memory file
+    const taskDir = path.join(tmpRepo, '.lacc', 'tasks', 'task-myid');
+    fs.mkdirSync(taskDir, { recursive: true });
+    fs.writeFileSync(path.join(taskDir, 'memory.md'), '# Memory content');
+
+    const testTask = { ...baseTask, repoPath: tmpRepo };
+    const result = await resolveStagePrompt('Context: {{archive:task-myid}}', testTask, baseWorkflow);
+    expect(result).toContain('# Memory content');
+    expect(result).not.toContain('{{archive:');
+  });
+
+  it('resolves {{archive:task-abc}} to empty string when memory.md missing', async () => {
+    // No .lacc dir at all in tmpRepo
+    const testTask = { ...baseTask, repoPath: tmpRepo };
+    const result = await resolveStagePrompt('Context: {{archive:nonexistent-task}}', testTask, baseWorkflow);
+    expect(result).toBe('Context: ');
+  });
+
+  it('replaces {{archive:*}} with empty string when no .lacc storage configured', async () => {
+    const testTask = { ...baseTask, repoPath: '/nonexistent/path/that/does/not/exist' };
+    const result = await resolveStagePrompt('Context: {{archive:some-task}}', testTask, baseWorkflow);
+    expect(result).toBe('Context: ');
+    expect(result).not.toContain('{{archive:');
+  });
+
+  it('resolves multiple {{archive:}} tokens in one prompt', async () => {
+    const taskDir1 = path.join(tmpRepo, '.lacc', 'tasks', 'task-1');
+    const taskDir2 = path.join(tmpRepo, '.lacc', 'tasks', 'task-2');
+    fs.mkdirSync(taskDir1, { recursive: true });
+    fs.mkdirSync(taskDir2, { recursive: true });
+    fs.writeFileSync(path.join(taskDir1, 'memory.md'), 'Memory A');
+    fs.writeFileSync(path.join(taskDir2, 'memory.md'), 'Memory B');
+
+    const testTask = { ...baseTask, repoPath: tmpRepo };
+    const result = await resolveStagePrompt(
+      'A: {{archive:task-1}} B: {{archive:task-2}}',
+      testTask,
+      baseWorkflow,
+    );
+    expect(result).toContain('Memory A');
+    expect(result).toContain('Memory B');
+    expect(result).not.toContain('{{archive:');
+  });
+});
+
 // ── resolveHostPath ───────────────────────────────────────────────────────────
 
 describe('resolveHostPath', () => {

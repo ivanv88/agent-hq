@@ -117,7 +117,33 @@ export async function resolveStagePrompt(
     }
   }
 
-  // 3. Sync variable substitution
+  // 3. Resolve {{archive:<taskId>}} directives
+  const ARCHIVE_RE = /\{\{archive:([^}]+)\}\}/g;
+  const archiveMatches = [...prompt.matchAll(ARCHIVE_RE)];
+  if (archiveMatches.length > 0) {
+    const { getTaskStoragePath } = await import('../storage/lacc.js');
+
+    for (const match of archiveMatches) {
+      const [token, arg] = match;
+      const taskId = arg.trim();
+
+      let memoryContent = '';
+      if (taskId) {
+        const storagePath = getTaskStoragePath(task.repoPath, taskId);
+        if (storagePath) {
+          try {
+            memoryContent = fs.readFileSync(
+              path.join(storagePath, 'memory.md'), 'utf-8'
+            );
+          } catch { /* file doesn't exist — leave empty */ }
+        }
+      }
+
+      prompt = prompt.replace(token, memoryContent);
+    }
+  }
+
+  // 4. Sync variable substitution
   return resolvePrompt(prompt, task, workflow);
 }
 
