@@ -75,7 +75,7 @@ async function handleCompletion(taskId: string, outcome: string | 'end', failure
     if (task.devPort) releasePort(task.devPort);
 
     const reason = failureReason ?? 'Unknown error';
-    updateTask(taskId, { status: 'FAILED', completedAt: now, ...containerPatch, failureReason: reason, flaggedForDelete: true, flaggedForDeleteAt: now });
+    updateTask(taskId, { status: 'FAILED', completedAt: now, ...containerPatch, failureReason: reason, archiveState: 'deleted' });
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(taskId)! });
     broadcastWsEvent({
       type: 'NOTIFICATION',
@@ -121,8 +121,7 @@ async function handleCompletion(taskId: string, outcome: string | 'end', failure
       status: 'DONE',
       completedAt: now,
       ...containerPatch,
-      flaggedForDelete: true,
-      flaggedForDeleteAt: now,
+      archiveState: 'deleted',
     });
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(taskId)! });
     broadcastWsEvent({

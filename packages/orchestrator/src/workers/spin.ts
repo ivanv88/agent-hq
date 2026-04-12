@@ -111,8 +111,7 @@ async function checkSpin(taskId: string, state: SpinState): Promise<void> {
       status: 'FAILED',
       failureReason: `Spin detected: no file changes for ${windowMin * 2} minutes`,
       containerId: undefined,
-      flaggedForDelete: true,
-      flaggedForDeleteAt: now,
+      archiveState: 'deleted',
     });
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(taskId)! });
     broadcastWsEvent({

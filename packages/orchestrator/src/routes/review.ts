@@ -102,8 +102,7 @@ export function registerReviewRoutes(fastify: FastifyInstance) {
       completedAt: now,
       containerId: undefined,
       worktreePath: null,
-      flaggedForDelete: false,
-      flaggedForDeleteAt: null,
+      archiveState: 'alive',
     });
 
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
@@ -138,8 +137,7 @@ export function registerReviewRoutes(fastify: FastifyInstance) {
       completedAt: now,
       containerId: undefined,
       worktreePath: null,
-      flaggedForDelete: true,
-      flaggedForDeleteAt: now,
+      archiveState: 'deleted',
     });
 
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });

@@ -110,8 +110,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       contextTokensUsed: null,
       lastFileChanged: null,
       rateLimitRetryAfter: null,
-      flaggedForDelete: false,
-      flaggedForDeleteAt: null,
+      archiveState: 'alive',
       prTitle: null,
       prBody: null,
       failureReason: null,
@@ -134,7 +133,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const now = new Date();
       appendChunk(taskId, JSON.stringify({ type: 'error', message: errMsg }));
-      updateTask(taskId, { status: 'FAILED', completedAt: now, failureReason: errMsg, flaggedForDelete: true, flaggedForDeleteAt: now });
+      updateTask(taskId, { status: 'FAILED', completedAt: now, failureReason: errMsg, archiveState: 'deleted' });
       broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(taskId)! });
       if (devPort) releasePort(devPort);
       // Kill container: try by DB id first, then fall back to label search
@@ -163,7 +162,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     if (task.devPort) releasePort(task.devPort);
 
     const now = new Date();
-    updateTask(task.id, { status: 'KILLED', completedAt: now, flaggedForDelete: true, flaggedForDeleteAt: now });
+    updateTask(task.id, { status: 'KILLED', completedAt: now, archiveState: 'deleted' });
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
     reply.status(204).send();
   });
@@ -248,7 +247,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const now = new Date();
       appendChunk(task.id, JSON.stringify({ type: 'error', message: errMsg }));
-      updateTask(task.id, { status: 'FAILED', completedAt: now, failureReason: errMsg, flaggedForDelete: true, flaggedForDeleteAt: now });
+      updateTask(task.id, { status: 'FAILED', completedAt: now, failureReason: errMsg, archiveState: 'deleted' });
       broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
       if (task.devPort) releasePort(task.devPort);
       const failed = getTask(task.id);
@@ -313,7 +312,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const now = new Date();
       appendChunk(task.id, JSON.stringify({ type: 'error', message: errMsg }));
-      updateTask(task.id, { status: 'FAILED', completedAt: now, failureReason: errMsg, flaggedForDelete: true, flaggedForDeleteAt: now });
+      updateTask(task.id, { status: 'FAILED', completedAt: now, failureReason: errMsg, archiveState: 'deleted' });
       broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
       if (task.devPort) releasePort(task.devPort);
       const failed = getTask(task.id);

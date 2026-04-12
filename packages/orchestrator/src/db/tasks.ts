@@ -28,10 +28,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     contextTokensUsed: row.context_tokens_used as number | null,
     lastFileChanged: row.last_file_changed as string | null,
     rateLimitRetryAfter: row.rate_limit_retry_after as number | null,
-    flaggedForDelete: Boolean(row.flagged_for_delete),
-    flaggedForDeleteAt: row.flagged_for_delete_at
-      ? new Date(row.flagged_for_delete_at as number)
-      : null,
+    archiveState: (row.archive_state as 'alive' | 'archived' | 'summary' | 'deleted') ?? 'alive',
     prTitle: row.pr_title as string | null,
     prBody: row.pr_body as string | null,
     failureReason: row.failure_reason as string | null,
@@ -53,7 +50,7 @@ export function insertTask(task: Task): void {
       status, oversight_mode, task_type, dev_server_mode, dev_port, dev_server_url,
       model, agent_name, skill_names, plan_first, max_retries, retry_count,
       cost_usd, input_tokens, output_tokens, context_tokens_used, last_file_changed,
-      rate_limit_retry_after, flagged_for_delete, flagged_for_delete_at,
+      rate_limit_retry_after, archive_state,
       pr_title, pr_body, failure_reason, created_at, started_at, completed_at,
       workflow_name, workflow_stage, workflow_status, workflow_skipped_stages
     ) VALUES (
@@ -61,7 +58,7 @@ export function insertTask(task: Task): void {
       @status, @oversightMode, @taskType, @devServerMode, @devPort, @devServerUrl,
       @model, @agentName, @skillNames, @planFirst, @maxRetries, @retryCount,
       @costUsd, @inputTokens, @outputTokens, @contextTokensUsed, @lastFileChanged,
-      @rateLimitRetryAfter, @flaggedForDelete, @flaggedForDeleteAt,
+      @rateLimitRetryAfter, @archiveState,
       @prTitle, @prBody, @failureReason, @createdAt, @startedAt, @completedAt,
       @workflowName, @workflowStage, @workflowStatus, @workflowSkippedStages
     )
@@ -91,8 +88,7 @@ export function insertTask(task: Task): void {
     contextTokensUsed: task.contextTokensUsed,
     lastFileChanged: task.lastFileChanged,
     rateLimitRetryAfter: task.rateLimitRetryAfter,
-    flaggedForDelete: task.flaggedForDelete ? 1 : 0,
-    flaggedForDeleteAt: task.flaggedForDeleteAt?.getTime() ?? null,
+    archiveState: task.archiveState,
     prTitle: task.prTitle,
     prBody: task.prBody,
     failureReason: task.failureReason,
@@ -136,8 +132,7 @@ export function updateTask(id: string, patch: Partial<Task>): void {
     contextTokensUsed: 'context_tokens_used',
     lastFileChanged: 'last_file_changed',
     rateLimitRetryAfter: 'rate_limit_retry_after',
-    flaggedForDelete: 'flagged_for_delete',
-    flaggedForDeleteAt: 'flagged_for_delete_at',
+    archiveState: 'archive_state',
     prTitle: 'pr_title',
     prBody: 'pr_body',
     failureReason: 'failure_reason',
@@ -158,7 +153,7 @@ export function updateTask(id: string, patch: Partial<Task>): void {
 
     if (key === 'skillNames' || key === 'workflowSkippedStages') {
       params[key] = JSON.stringify(val);
-    } else if (key === 'planFirst' || key === 'flaggedForDelete') {
+    } else if (key === 'planFirst') {
       params[key] = val ? 1 : 0;
     } else if (val instanceof Date) {
       params[key] = val.getTime();

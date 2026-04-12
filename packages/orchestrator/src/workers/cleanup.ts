@@ -131,7 +131,7 @@ async function cleanupFlaggedWorktrees(): Promise<void> {
         // Also rm -rf just in case
         fs.rmSync(task.worktree_path, { recursive: true, force: true });
       }
-      updateTask(task.id, { worktreePath: null, flaggedForDelete: false });
+      updateTask(task.id, { worktreePath: null, archiveState: 'alive' });
     } catch (err) {
       console.error(`Cleanup: failed to remove worktree ${task.worktree_path}:`, err);
     }

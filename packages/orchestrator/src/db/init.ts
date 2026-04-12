@@ -59,8 +59,7 @@ function createTables() {
       context_tokens_used INTEGER,
       last_file_changed TEXT,
       rate_limit_retry_after INTEGER,
-      flagged_for_delete INTEGER NOT NULL DEFAULT 0,
-      flagged_for_delete_at INTEGER,
+      archive_state TEXT NOT NULL DEFAULT 'alive',
       pr_title TEXT,
       pr_body TEXT,
       failure_reason TEXT,
@@ -179,6 +178,19 @@ function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_checkpoints_task ON workflow_checkpoints(task_id);
     `);
     db.pragma('user_version = 4');
+  }
+
+  if (version < 5) {
+    const taskColumns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+    const colNames = taskColumns.map(c => c.name);
+
+    if (!colNames.includes('archive_state')) {
+      db.exec("ALTER TABLE tasks ADD COLUMN archive_state TEXT NOT NULL DEFAULT 'alive'");
+    }
+    // flagged_for_delete and flagged_for_delete_at are kept as dead columns on existing DBs
+    // (SQLite does not support DROP COLUMN in older versions) — they are ignored by rowToTask
+
+    db.pragma('user_version = 5');
   }
 }
 
