@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import yaml from 'js-yaml';
 import type { OversightMode, DevServerMode } from '@lacc/shared';
 import type { GlobalConfig } from './global.js';
 
 export interface RepoConfig {
+  // Existing fields — unchanged
   devServerMode?: DevServerMode;
   devPort?: number;
   oversightMode?: OversightMode;
@@ -11,6 +13,10 @@ export interface RepoConfig {
   branchTemplate?: string;
   postCreateCommand?: string;
   proxyHostname?: string;
+  // New fields
+  commitLacc?: boolean;
+  defaultWorkflow?: string | null;
+  baseBranch?: string;
 }
 
 export interface MergedConfig extends GlobalConfig {
@@ -24,13 +30,33 @@ export interface MergedConfig extends GlobalConfig {
 
 export function loadRepoConfig(repoPath: string): RepoConfig {
   const laccPath = path.join(repoPath, '.lacc');
-  if (!fs.existsSync(laccPath)) return {};
 
+  // 1. .lacc/ directory with config.yml (new format)
   try {
-    return JSON.parse(fs.readFileSync(laccPath, 'utf-8'));
+    const stat = fs.statSync(laccPath);
+    if (stat.isDirectory()) {
+      const configYml = path.join(laccPath, 'config.yml');
+      if (fs.existsSync(configYml)) {
+        const raw = yaml.load(fs.readFileSync(configYml, 'utf-8'));
+        return (raw as RepoConfig) ?? {};
+      }
+      return {};
+    }
   } catch {
-    return {};
+    // laccPath doesn't exist — fall through
   }
+
+  // 2. .lacc as a flat JSON file (legacy format — read-only support)
+  try {
+    const stat = fs.statSync(laccPath);
+    if (stat.isFile()) {
+      return JSON.parse(fs.readFileSync(laccPath, 'utf-8')) as RepoConfig;
+    }
+  } catch {
+    // not found or parse error
+  }
+
+  return {};
 }
 
 export function mergeConfigs(global: GlobalConfig, repo: RepoConfig): MergedConfig {
