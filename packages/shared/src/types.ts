@@ -17,6 +17,7 @@ export type DevServerMode = 'port' | 'proxy' | 'none';
 export type PoolContainerStatus = 'WARMING' | 'READY' | 'CLAIMED';
 export type WorkflowGate = 'auto' | 'manual';
 export type WorkflowStatus = 'running' | 'waiting_gate' | 'complete';
+export type ArchiveState = 'alive' | 'archived' | 'summary' | 'deleted';
 
 export interface Task {
   id: string;
@@ -44,8 +45,7 @@ export interface Task {
   contextTokensUsed: number | null;
   lastFileChanged: string | null;
   rateLimitRetryAfter: number | null;
-  flaggedForDelete: boolean;
-  flaggedForDeleteAt: Date | null;
+  archiveState: ArchiveState;
   prTitle: string | null;
   prBody: string | null;
   failureReason: string | null;
@@ -260,7 +260,7 @@ export interface ConfigPatch {
   poolSize?: number;
   costAlertThreshold?: number;
   spinDetectionWindowMin?: number;
-  worktreeAutoDeleteHours?: number;
+  globalLaccPath?: string;
   editorCommand?: string;
   defaultModel?: string;
   defaultOversightMode?: OversightMode;
