@@ -13,6 +13,7 @@ import { getDiff } from '../../../src/git/worktree.js';
 const mockGetDiff = vi.mocked(getDiff);
 
 const baseTask = {
+  id: 'task-abc-123',
   branchName: 'feat/auth-jwt',
   worktreePath: '/tmp/test-worktree',
   baseBranch: 'main',
@@ -84,6 +85,37 @@ describe('resolvePrompt', () => {
     expect(result).toBe(
       'Read /workspace/ai-docs/.jira.md and write to /workspace/ai-docs/.spec.md in /workspace',
     );
+  });
+
+  // New task-related variables
+  it('resolves {{task_dir}}', () => {
+    const result = resolvePrompt('dir: {{task_dir}}', baseTask, baseWorkflow);
+    expect(result).toBe('dir: /workspace/.lacc/tasks/task-abc-123/');
+  });
+
+  it('resolves {{task_spec}}', () => {
+    const result = resolvePrompt('{{task_spec}}', baseTask, baseWorkflow);
+    expect(result).toBe('/workspace/.lacc/tasks/task-abc-123/.spec.md');
+  });
+
+  it('resolves {{task_plan}}', () => {
+    const result = resolvePrompt('{{task_plan}}', baseTask, baseWorkflow);
+    expect(result).toBe('/workspace/.lacc/tasks/task-abc-123/.plan.md');
+  });
+
+  it('resolves {{task_review}}', () => {
+    const result = resolvePrompt('{{task_review}}', baseTask, baseWorkflow);
+    expect(result).toBe('/workspace/.lacc/tasks/task-abc-123/.review.md');
+  });
+
+  it('resolves {{memory}}', () => {
+    const result = resolvePrompt('{{memory}}', baseTask, baseWorkflow);
+    expect(result).toBe('/workspace/.lacc/tasks/task-abc-123/memory.md');
+  });
+
+  it('does not change existing {{spec}} behaviour', () => {
+    const result = resolvePrompt('{{spec}}', baseTask, baseWorkflow);
+    expect(result).toBe('/workspace/ai-docs/.spec.md');
   });
 });
 

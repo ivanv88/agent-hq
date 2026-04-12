@@ -13,6 +13,7 @@ export function resolvePrompt(
 ): string {
   const containerWorkspace = '/workspace';
   const containerDocsDir = `${containerWorkspace}/${workflow.docsDir ?? 'ai-docs'}`;
+  const taskDir = `${containerWorkspace}/.lacc/tasks/${task.id}`;
   const vars: Record<string, string> = {
     '{{user_docs}}': containerDocsDir,   // spec primary name
     '{{docs_dir}}':  containerDocsDir,   // backward compat alias
@@ -23,6 +24,11 @@ export function resolvePrompt(
     '{{plan}}':      `${containerDocsDir}/.plan.md`,
     '{{review}}':    `${containerDocsDir}/.review.md`,
     '{{jira}}':      `${containerDocsDir}/.jira.md`,
+    '{{task_dir}}':    `${taskDir}/`,
+    '{{task_spec}}':   `${taskDir}/.spec.md`,
+    '{{task_plan}}':   `${taskDir}/.plan.md`,
+    '{{task_review}}': `${taskDir}/.review.md`,
+    '{{memory}}':      `${taskDir}/memory.md`,
   };
   let result = prompt;
   for (const [token, value] of Object.entries(vars)) {
