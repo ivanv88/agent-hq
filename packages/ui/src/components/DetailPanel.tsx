@@ -8,7 +8,7 @@ import { MessageFeed, CommandBox, CommandPalette } from './feed/index.js';
 import type { ParsedInput } from './feed/index.js';
 import { useTaskFeed } from '../hooks/useTaskFeed.js';
 
-type TabId = 'feed' | 'diff' | 'preview' | 'workflow';
+type TabId = 'feed' | 'diff' | 'preview' | 'workflow' | 'memory';
 
 interface Props {
   task: Task | null;
@@ -35,6 +35,7 @@ export function DetailPanel({
 }: Props) {
   const [tab, setTab] = useState<TabId>('feed');
   const [slashPrefix, setSlashPrefix] = useState<string | null>(null);
+  const [memoryContent, setMemoryContent] = useState<string | null>(null);
 
   const { messages, appendUserMessage } = useTaskFeed(task?.id ?? null, task?.retryCount ?? 0);
 
@@ -62,8 +63,19 @@ export function DetailPanel({
           : undefined,
       });
     }
+    if (memoryContent) {
+      result.push({ id: 'memory', label: 'memory' });
+    }
     return result;
-  }, [showDiff, showPreview, task?.status, task?.workflowName, task?.workflowStatus]);
+  }, [showDiff, showPreview, task?.status, task?.workflowName, task?.workflowStatus, memoryContent]);
+
+  useEffect(() => {
+    if (!task) { setMemoryContent(null); return; }
+    fetch(`/api/tasks/${task.id}/memory`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setMemoryContent(data?.content ?? null))
+      .catch(() => setMemoryContent(null));
+  }, [task?.id]);
 
   useEffect(() => {
     if (task?.workflowStatus === 'waiting_gate') setTab('workflow');
@@ -111,6 +123,14 @@ export function DetailPanel({
       });
     }
   }, [task, appendUserMessage, onComplete, onDiscard, onFeedback, onKill, onPause, onResume, onRestart, onWorkflowContinue, onWorkflowSkip, onWorkflowRerun]);
+
+  function handleRegenerateMemory() {
+    if (!task) return;
+    fetch(`/api/tasks/${task.id}/memory-snapshot`, { method: 'POST' })
+      .then(r => r.json())
+      .then(data => setMemoryContent(data.content ?? null))
+      .catch(() => {});
+  }
 
   if (!task) {
     return (
@@ -221,6 +241,21 @@ export function DetailPanel({
             />
           </div>
         )}
+        {tab === 'memory' && memoryContent && (
+          <div className="p-4 overflow-y-auto h-full">
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={handleRegenerateMemory}
+                className="text-xs text-text-secondary hover:text-text-primary duration-100"
+              >
+                Regenerate
+              </button>
+            </div>
+            <div className="whitespace-pre-wrap text-text-secondary text-sm">
+              {memoryContent}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action bar — kept alongside CommandBox for buttons not yet in palette */}
@@ -241,6 +276,12 @@ export function DetailPanel({
         onWorkflowContinue={() => onWorkflowContinue(task.id)}
         onWorkflowSkip={() => onWorkflowSkip(task.id)}
         onWorkflowRerun={() => onWorkflowRerun(task.id)}
+        onSaveMemory={() => {}}
+        onArchive={() => {}}
+        onGitPull={() => {}}
+        onGitPush={() => {}}
+        onGitRebase={() => {}}
+        onGitStash={() => {}}
       />
     </div>
   );
