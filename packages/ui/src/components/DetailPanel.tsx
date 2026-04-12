@@ -276,12 +276,30 @@ export function DetailPanel({
         onWorkflowContinue={() => onWorkflowContinue(task.id)}
         onWorkflowSkip={() => onWorkflowSkip(task.id)}
         onWorkflowRerun={() => onWorkflowRerun(task.id)}
-        onSaveMemory={() => {}}
-        onArchive={() => {}}
-        onGitPull={() => {}}
-        onGitPush={() => {}}
-        onGitRebase={() => {}}
-        onGitStash={() => {}}
+        onSaveMemory={() => {
+          fetch(`/api/tasks/${task.id}/memory-snapshot`, { method: 'POST' })
+            .then(r => r.json())
+            .catch(() => {});
+        }}
+        onArchive={(level) => {
+          fetch(`/api/tasks/${task.id}/archive`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level }),
+          }).catch(() => {});
+        }}
+        onGitPull={() => {
+          fetch(`/api/tasks/${task.id}/git/pull`, { method: 'POST' }).catch(() => {});
+        }}
+        onGitPush={() => {
+          fetch(`/api/tasks/${task.id}/git/push`, { method: 'POST' }).catch(() => {});
+        }}
+        onGitRebase={() => {
+          fetch(`/api/tasks/${task.id}/git/rebase`, { method: 'POST' }).catch(() => {});
+        }}
+        onGitStash={() => {
+          fetch(`/api/tasks/${task.id}/git/stash`, { method: 'POST' }).catch(() => {});
+        }}
       />
     </div>
   );

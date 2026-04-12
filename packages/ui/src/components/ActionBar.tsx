@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Task } from '@lacc/shared';
 import { Button } from './ui/Button.js';
+import { ArchiveModal } from '../modals/ArchiveModal.js';
 
 interface Props {
   task: Task;
@@ -19,16 +20,23 @@ interface Props {
   onWorkflowContinue?: () => void;
   onWorkflowSkip?: () => void;
   onWorkflowRerun?: () => void;
+  onSaveMemory: () => void;
+  onArchive: (level: 'archived' | 'summary' | 'deleted') => void;
+  onGitPull: () => void;
+  onGitPush: () => void;
+  onGitRebase: () => void;
+  onGitStash: () => void;
 }
 
 export function ActionBar({
   task, onComplete, onDiscard, onFeedback,
   onOpenEditor, onOpenBrowser, onKill, onPause, onResume, onRestart, onMemory, onCommit, onMerge,
-  onWorkflowContinue, onWorkflowSkip, onWorkflowRerun
+  onWorkflowContinue, onWorkflowSkip, onWorkflowRerun,
+  onSaveMemory, onArchive, onGitPull, onGitPush, onGitRebase, onGitStash,
 }: Props) {
+  const [showArchive, setShowArchive] = useState(false);
 
   if (task.status === 'READY') {
-    // Workflow gate — show stage controls instead of review actions
     if (task.workflowName && task.workflowStatus === 'waiting_gate') {
       return (
         <div style={{ padding: '10px 20px', borderTop: '1px solid #2a1a08', background: '#0a0804',
@@ -41,6 +49,22 @@ export function ActionBar({
             <Button variant="ghost" size="sm" onClick={onWorkflowSkip}>Skip</Button>
             <Button variant="success" size="sm" onClick={onWorkflowContinue}>Continue →</Button>
           </div>
+          {task.worktreePath && (
+            <>
+              <span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+              <Button variant="ghost" size="sm" onClick={onGitRebase}>Rebase</Button>
+              <Button variant="ghost" size="sm" onClick={onGitPull}>Pull</Button>
+              <Button variant="ghost" size="sm" onClick={onGitPush}>Push</Button>
+              <Button variant="ghost" size="sm" onClick={onGitStash}>Stash</Button>
+            </>
+          )}
+          {showArchive && (
+            <ArchiveModal
+              task={task}
+              onConfirm={(level) => { onArchive(level); setShowArchive(false); }}
+              onClose={() => setShowArchive(false)}
+            />
+          )}
         </div>
       );
     }
@@ -58,27 +82,21 @@ export function ActionBar({
         }}
       >
         <span style={{ color: '#4a4020', fontSize: 14, marginRight: 4 }}>Review actions:</span>
-
         <Button variant="success" onClick={onComplete} title="Merge & Complete (A)" kbd="A">
           Merge & Complete
         </Button>
-
         <Button variant="warning" onClick={onFeedback} title="Feedback (F)" kbd="F">
           Feedback
         </Button>
-
         <Button variant="danger" onClick={onDiscard} title="Discard (X)" kbd="X">
           Discard
         </Button>
-
         <Button variant="ghost" onClick={onMemory}>
           Memory
         </Button>
-
         {task.worktreePath && (
           <Button variant="ghost" onClick={onCommit}>Commit</Button>
         )}
-
         {task.worktreePath && (
           <Button
             variant="ghost"
@@ -89,6 +107,22 @@ export function ActionBar({
           >
             Open in Editor
           </Button>
+        )}
+        {task.worktreePath && (
+          <>
+            <span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+            <Button variant="ghost" size="sm" onClick={onGitRebase}>Rebase</Button>
+            <Button variant="ghost" size="sm" onClick={onGitPull}>Pull</Button>
+            <Button variant="ghost" size="sm" onClick={onGitPush}>Push</Button>
+            <Button variant="ghost" size="sm" onClick={onGitStash}>Stash</Button>
+          </>
+        )}
+        {showArchive && (
+          <ArchiveModal
+            task={task}
+            onConfirm={(level) => { onArchive(level); setShowArchive(false); }}
+            onClose={() => setShowArchive(false)}
+          />
         )}
       </div>
     );
@@ -113,23 +147,35 @@ export function ActionBar({
             Editor
           </Button>
         )}
-
         <Button variant="ghost" size="sm" onClick={onPause} title="Pause (P)">
           Pause
         </Button>
-
         <Button variant="ghost" size="sm" onClick={onRestart} title="Restart (R)">
           Restart
         </Button>
-
         <Button variant="danger" size="sm" onClick={onKill} title="Kill (K)">
           Kill
         </Button>
-
         {task.devServerUrl && (
           <Button variant="ghost" size="sm" onClick={onOpenBrowser} title="Open browser (B)">
             Browser
           </Button>
+        )}
+        {task.worktreePath && (
+          <>
+            <span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+            <Button variant="ghost" size="sm" onClick={onGitRebase}>Rebase</Button>
+            <Button variant="ghost" size="sm" onClick={onGitPull}>Pull</Button>
+            <Button variant="ghost" size="sm" onClick={onGitPush}>Push</Button>
+            <Button variant="ghost" size="sm" onClick={onGitStash}>Stash</Button>
+          </>
+        )}
+        {showArchive && (
+          <ArchiveModal
+            task={task}
+            onConfirm={(level) => { onArchive(level); setShowArchive(false); }}
+            onClose={() => setShowArchive(false)}
+          />
         )}
       </div>
     );
@@ -151,10 +197,25 @@ export function ActionBar({
         <Button variant="success" size="sm" onClick={onResume} title="Resume (R)">
           Resume
         </Button>
-
         <Button variant="danger" size="sm" onClick={onKill} title="Kill (K)">
           Kill
         </Button>
+        {task.worktreePath && (
+          <>
+            <span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+            <Button variant="ghost" size="sm" onClick={onGitRebase}>Rebase</Button>
+            <Button variant="ghost" size="sm" onClick={onGitPull}>Pull</Button>
+            <Button variant="ghost" size="sm" onClick={onGitPush}>Push</Button>
+            <Button variant="ghost" size="sm" onClick={onGitStash}>Stash</Button>
+          </>
+        )}
+        {showArchive && (
+          <ArchiveModal
+            task={task}
+            onConfirm={(level) => { onArchive(level); setShowArchive(false); }}
+            onClose={() => setShowArchive(false)}
+          />
+        )}
       </div>
     );
   }
@@ -174,16 +235,30 @@ export function ActionBar({
       >
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>autoresume</span>
         <RateLimitCountdown retryAfter={task.rateLimitRetryAfter} />
-
         {task.worktreePath && (
           <Button variant="ghost" size="sm" onClick={onOpenEditor} title="Open editor (O)">
             Editor
           </Button>
         )}
-
         <Button variant="danger" size="sm" onClick={onKill} style={{ marginLeft: 'auto' }}>
           Discard
         </Button>
+        {task.worktreePath && (
+          <>
+            <span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+            <Button variant="ghost" size="sm" onClick={onGitRebase}>Rebase</Button>
+            <Button variant="ghost" size="sm" onClick={onGitPull}>Pull</Button>
+            <Button variant="ghost" size="sm" onClick={onGitPush}>Push</Button>
+            <Button variant="ghost" size="sm" onClick={onGitStash}>Stash</Button>
+          </>
+        )}
+        {showArchive && (
+          <ArchiveModal
+            task={task}
+            onConfirm={(level) => { onArchive(level); setShowArchive(false); }}
+            onClose={() => setShowArchive(false)}
+          />
+        )}
       </div>
     );
   }
@@ -205,20 +280,36 @@ export function ActionBar({
       <Button variant="ghost" size="sm" onClick={onRestart} title="Restart (R)" kbd="R">
         Restart
       </Button>
-
       {task.worktreePath && (
         <Button variant="ghost" size="sm" onClick={onOpenEditor} title="Open editor (O)" kbd="O">
           Editor
         </Button>
       )}
-
       {task.worktreePath && (
         <>
           <Button variant="success" size="sm" onClick={onCommit}>Commit</Button>
           <Button variant="ghost" size="sm" onClick={onMerge}>Merge</Button>
         </>
       )}
-
+      <span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+      <Button variant="ghost" size="sm" onClick={onSaveMemory}>Save memory</Button>
+      <Button variant="ghost" size="sm" onClick={() => setShowArchive(true)}>Archive ▾</Button>
+      {task.worktreePath && (
+        <>
+          <span style={{ width: 1, height: 16, background: '#2a2a2a', margin: '0 4px' }} />
+          <Button variant="ghost" size="sm" onClick={onGitRebase}>Rebase</Button>
+          <Button variant="ghost" size="sm" onClick={onGitPull}>Pull</Button>
+          <Button variant="ghost" size="sm" onClick={onGitPush}>Push</Button>
+          <Button variant="ghost" size="sm" onClick={onGitStash}>Stash</Button>
+        </>
+      )}
+      {showArchive && (
+        <ArchiveModal
+          task={task}
+          onConfirm={(level) => { onArchive(level); setShowArchive(false); }}
+          onClose={() => setShowArchive(false)}
+        />
+      )}
     </div>
   );
 }
@@ -248,4 +339,3 @@ function RateLimitCountdown({ retryAfter }: { retryAfter: number | null }) {
     </span>
   );
 }
-
