@@ -231,6 +231,21 @@ export async function configure(
     `${task.repoPath}:/original-repo:ro`, // Issue 7 fix
   ];
 
+  // Mount global LACC library read-only
+  const laccDataDir = path.join(os.homedir(), '.lacc-data');
+  binds.push(`${laccDataDir}:/lacc-global:ro`);
+
+  // Mount task storage at /workspace/.lacc if repo uses global mode
+  const { getContainerTaskMount } = await import('../storage/lacc.js');
+  const { hostPath, needsExplicitMount } = getContainerTaskMount(
+    task.repoPath,
+    worktreePath,
+    task.id,
+  );
+  if (needsExplicitMount && hostPath) {
+    binds.push(`${hostPath}:/workspace/.lacc`);
+  }
+
   const env: string[] = [
     `LACC_TASK_ID=${task.id}`,
     `LACC_REPO_PATH=${task.repoPath}`,
@@ -349,6 +364,8 @@ export async function startClaude(containerId: string, task: Task): Promise<{ st
   // Prompt MUST come before --add-dir: --add-dir is variadic and consumes trailing args
   cmd.push(task.prompt.replace(/\0/g, ''));
   cmd.push('--add-dir', '/original-repo');  // Issue 7 fix: container-internal path
+  cmd.push('--add-dir', '/workspace/.lacc');
+  cmd.push('--add-dir', '/lacc-global');
 
   const exec = await container.exec({
     Cmd: cmd,
