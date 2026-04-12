@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('simple-git', () => ({
-  default: vi.fn(() => ({
+  simpleGit: vi.fn(() => ({
     pull: vi.fn().mockResolvedValue({}),
     push: vi.fn().mockResolvedValue({}),
     stash: vi.fn().mockResolvedValue(''),
