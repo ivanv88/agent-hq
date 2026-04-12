@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'crypto';
 import type { Task } from '@lacc/shared';
@@ -335,6 +336,42 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
 
     return { ok: true };
   });
+
+  // Archive task — set retention level
+  fastify.post<{ Params: { id: string }; Body: { level: string } }>(
+    '/tasks/:id/archive',
+    async (req, reply) => {
+      const { id } = req.params;
+      const { level } = req.body;
+
+      if (!['archived', 'summary', 'deleted'].includes(level)) {
+        return reply.code(400).send({ error: 'level must be archived, summary, or deleted' });
+      }
+
+      const task = getTask(id);
+      if (!task) return reply.code(404).send({ error: 'Task not found' });
+
+      updateTask(id, { archiveState: level as import('@lacc/shared').ArchiveState });
+
+      // If deleting task artifacts, clean them up immediately
+      if (level === 'summary' || level === 'deleted') {
+        const { getTaskStoragePath } = await import('../storage/lacc.js');
+        const storagePath = getTaskStoragePath(task.repoPath, id);
+        if (storagePath && fs.existsSync(storagePath)) {
+          const toDelete = level === 'deleted'
+            ? [storagePath]
+            : ['.spec.md', '.plan.md', '.review.md'].map(f => path.join(storagePath, f));
+          for (const p of toDelete) {
+            if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
+          }
+        }
+      }
+
+      const updated = getTask(id)!;
+      broadcastWsEvent({ type: 'TASK_UPDATED', task: updated });
+      return updated;
+    }
+  );
 
   // SSE log stream
   fastify.get<{ Params: { id: string } }>('/tasks/:id/logs', async (req, reply) => {
