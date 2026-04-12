@@ -7,7 +7,7 @@ export interface GlobalConfig {
   poolSize: number;
   costAlertThreshold: number;
   spinDetectionWindowMin: number;
-  worktreeAutoDeleteHours: number;
+  globalLaccPath: string;
   editorCommand: string;
   defaultModel: string;
   defaultOversightMode: OversightMode;
@@ -29,7 +29,7 @@ const DEFAULTS: GlobalConfig = {
   poolSize: 2,
   costAlertThreshold: 1.0,
   spinDetectionWindowMin: 5,
-  worktreeAutoDeleteHours: 24,
+  globalLaccPath: path.join(os.homedir(), '.lacc-data'),
   editorCommand: 'code',
   defaultModel: 'claude-sonnet-4-6',
   defaultOversightMode: 'GATE_ON_COMPLETION',

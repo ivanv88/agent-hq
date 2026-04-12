@@ -101,37 +101,22 @@ async function cleanupTerminalContainers(): Promise<void> {
 }
 
 async function cleanupFlaggedWorktrees(): Promise<void> {
-  const config = getGlobalConfig();
-  const cutoffMs = config.worktreeAutoDeleteHours * 60 * 60 * 1000;
-  const now = Date.now();
-
   const db = getDb();
   const tasks = db.prepare(
-    `SELECT id, worktree_path, branch_name, flagged_for_delete_at
+    `SELECT id, worktree_path, branch_name
      FROM tasks
-     WHERE flagged_for_delete = 1
-       AND flagged_for_delete_at IS NOT NULL
+     WHERE archive_state IN ('archived', 'summary', 'deleted')
        AND worktree_path IS NOT NULL`
-  ).all() as Array<{
-    id: string;
-    worktree_path: string;
-    branch_name: string;
-    flagged_for_delete_at: number;
-  }>;
+  ).all() as Array<{ id: string; worktree_path: string; branch_name: string }>;
 
   for (const task of tasks) {
-    const age = now - task.flagged_for_delete_at;
-    if (age < cutoffMs) continue;
-
     try {
       if (fs.existsSync(task.worktree_path)) {
-        // Clean up checkpoint refs before removing the worktree
         await cleanupCheckpointRefs(task.id, task.worktree_path);
         await cleanupWorktree(task.worktree_path, task.branch_name);
-        // Also rm -rf just in case
         fs.rmSync(task.worktree_path, { recursive: true, force: true });
       }
-      updateTask(task.id, { worktreePath: null, archiveState: 'alive' });
+      updateTask(task.id, { worktreePath: null });
     } catch (err) {
       console.error(`Cleanup: failed to remove worktree ${task.worktree_path}:`, err);
     }
