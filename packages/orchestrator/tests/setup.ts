@@ -75,7 +75,7 @@ vi.mock('../src/config/global.js', () => ({
     outputCostPer1M: 15.00,
     costAlertThreshold: 5.00,
     spinDetectionWindowMin: 5,
-    worktreeAutoDeleteHours: 24,
+    globalLaccPath: '/tmp/lacc-data',
     branchTemplate: '{type}/{ticket}-{slug}-{date}',
     devPortRangeStart: 4000,
     anthropicApiKey: '',
