@@ -373,6 +373,25 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // Generate memory snapshot
+  fastify.post<{ Params: { id: string } }>('/tasks/:id/memory-snapshot', async (req, reply) => {
+    const task = getTask(req.params.id);
+    if (!task) return reply.code(404).send({ error: 'Task not found' });
+    const { saveMemorySnapshot } = await import('../memory/snapshot.js');
+    const content = await saveMemorySnapshot(task);
+    return { content };
+  });
+
+  // Read memory snapshot
+  fastify.get<{ Params: { id: string } }>('/tasks/:id/memory', async (req, reply) => {
+    const task = getTask(req.params.id);
+    if (!task) return reply.code(404).send({ error: 'Task not found' });
+    const { readMemorySnapshot } = await import('../memory/snapshot.js');
+    const content = readMemorySnapshot(task.repoPath, task.id);
+    if (!content) return reply.code(404).send({ error: 'No memory snapshot found' });
+    return { content };
+  });
+
   // SSE log stream
   fastify.get<{ Params: { id: string } }>('/tasks/:id/logs', async (req, reply) => {
     const task = getTask(req.params.id);
