@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Docs
 
-`ai-docs/` is the single documentation directory. **Read files here only when directly relevant to the current task — do not load them upfront.**
+`docs/` is the single documentation directory. **Read files here only when directly relevant to the current task — do not load them upfront.**
 
 ### Reference (stable, read when relevant)
 
@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `specs/` — Design documents (`YYYY-MM-DD-<topic>-design.md`)
 - `plans/` — Implementation plans (`YYYY-MM-DD-<topic>.md`)
 
-**Agent instruction:** Write all specs to `ai-docs/specs/` and all plans to `ai-docs/plans/`. This overrides any default paths used by brainstorming or writing-plans skills.
+**Agent instruction:** Write all specs to `docs/specs/` and all plans to `docs/plans/`. This overrides any default paths used by brainstorming or writing-plans skills.
 
 ## Commands
 
@@ -108,7 +108,7 @@ Custom hooks in `src/hooks/`: `useWebSocket`, `useTasks`, `usePool`, `useKeyboar
 
 - **New route** → add a test in `tests/api/` covering success + key error cases (404, 400, 409)
 - **New pure logic** (parser, db helper, git util, workflow function) → add a unit test
-- **React components** → no automated test; verify manually using the verification plans in `ai-docs/`
+- **React components** → no automated test; verify manually using the verification plans in `docs/`
 - **Always run the relevant package's tests after making changes** and confirm they pass before finishing
 
 ### What not to test

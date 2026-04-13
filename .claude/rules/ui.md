@@ -5,7 +5,7 @@ paths:
 
 # UI Rules
 
-Full patterns and code examples: `ai-docs/ui-best-practices.md`. These rules are mandatory — no exceptions unless instructed so.
+Full patterns and code examples: `docs/ui-best-practices.md`. These rules are mandatory — no exceptions unless instructed so.
 
 ## Design Tokens
 

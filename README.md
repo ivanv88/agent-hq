@@ -39,7 +39,7 @@ Open `http://localhost:7842`.
 
 A workflow is a YAML file that defines a sequence of stages. Each stage runs a Claude agent with its own prompt; stages can advance automatically or pause for manual review.
 
-Place workflow definitions in `ai-docs/` (or the `docsDir` configured for the repo).
+Place workflow definitions in `docs/` (or the `docsDir` configured for the repo).
 
 ```yaml
 name: feature
