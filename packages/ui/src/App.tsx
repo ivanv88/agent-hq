@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import type { WsEvent, SpawnTaskInput, Notification } from '@lacc/shared';
+import type { WsEvent, SpawnTaskInput } from '@lacc/shared';
 import { useWebSocket } from './hooks/useWebSocket.js';
 import { usePool } from './hooks/usePool.js';
 import { useTasks } from './hooks/useTasks.js';
@@ -8,7 +8,8 @@ import { useConfig } from './hooks/useConfig.js';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts.js';
 import { useRepoPaths } from './hooks/useRepoPaths.js';
 import { useSessionCost } from './hooks/useSessionCost.js';
-import { useModalState } from './hooks/useModalState.js';
+import { ModalProvider, useModal } from './context/ModalContext.js';
+import { NotificationProvider } from './context/NotificationContext.js';
 import { TopBar } from './components/TopBar.js';
 import { NavRail } from './components/NavRail.js';
 import { NotificationStrip } from './components/NotificationStrip.js';
@@ -26,9 +27,13 @@ import { SettingsPage } from './pages/SettingsPage.js';
 
 export function App() {
   return (
-    <BrowserRouter>
-      <AppShell />
-    </BrowserRouter>
+    <ModalProvider>
+      <NotificationProvider>
+        <BrowserRouter>
+          <AppShell />
+        </BrowserRouter>
+      </NotificationProvider>
+    </ModalProvider>
   );
 }
 
@@ -38,35 +43,21 @@ function AppShell() {
   const isTasksPage = location.pathname === '/tasks' || location.pathname === '/';
 
   const [lastEvent, setLastEvent] = useState<WsEvent | null>(null);
-  const [lastNotification, setLastNotification] = useState<Notification | null>(null);
 
   const { repoPaths, activeRepo, setActiveRepo, addRepo, removeRepo } = useRepoPaths();
   const sessionUsage = useSessionCost(lastEvent);
-  const {
-    modal, modalTask,
-    openNew, openFeedback, openMemory, openCommit, openMerge, openMergeComplete, openGitInit,
-    close,
-  } = useModalState();
+  const { modal, modalTask, openNew, closeModal } = useModal();
 
   const { tasks, handleWsEvent } = useTasks();
 
   const onWsEvent = useCallback((event: WsEvent) => {
     handleWsEvent(event);
     setLastEvent(event);
-    if (event.type === 'NOTIFICATION') setLastNotification(event.notification);
   }, [handleWsEvent]);
 
   useWebSocket(onWsEvent);
   const pool = usePool(lastEvent);
   const { config, loading: configLoading, save: saveConfig } = useConfig();
-
-  const apiAction = useCallback(async (path: string, method = 'POST', body?: unknown) => {
-    await fetch(path, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  }, []);
 
   const spawnTask = useCallback(async (input: SpawnTaskInput) => {
     const res = await fetch('/tasks', {
@@ -86,13 +77,12 @@ function AppShell() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: task.repoPath }),
     });
-    close();
+    closeModal();
     await fetch(`/tasks/${task.id}/restart`, { method: 'POST' });
-  }, [modalTask, close]);
+  }, [modalTask, closeModal]);
 
   const goToSettings = useCallback(() => navigate('/settings'), [navigate]);
 
-  // Global shortcuts: new task + settings navigation
   useKeyboardShortcuts({
     disabled: modal !== null,
     onNew: openNew,
@@ -141,24 +131,11 @@ function AppShell() {
       <div className="flex flex-1 min-h-0">
         <NavRail />
 
-        {/*
-          TasksPage is always mounted so the Terminal (xterm canvas + SSE connection)
-          survives route changes. Visibility is toggled with CSS only — no unmount.
-          Keyboard shortcuts are disabled when hidden via modalOpen.
-        */}
         <div className={isTasksPage ? 'flex flex-1 min-h-0' : 'hidden'}>
           <TasksPage
             tasks={tasks}
             activeRepo={activeRepo}
             modalOpen={modal !== null || !isTasksPage}
-            openFeedback={openFeedback}
-            openMemory={openMemory}
-            openCommit={openCommit}
-            openMerge={openMerge}
-            openMergeComplete={openMergeComplete}
-            openGitInit={openGitInit}
-            apiAction={apiAction}
-            onNotify={setLastNotification}
           />
         </div>
 
@@ -172,14 +149,11 @@ function AppShell() {
         </Routes>
       </div>
 
-      <NotificationStrip
-        newNotification={lastNotification}
-        onSelectTask={() => {}}
-      />
+      <NotificationStrip />
 
       {modal === 'new' && (
         <NewTaskModal
-          onClose={close}
+          onClose={closeModal}
           onSubmit={spawnTask}
           repoPaths={repoPaths}
           activeRepo={activeRepo}
@@ -188,26 +162,30 @@ function AppShell() {
       {modal === 'feedback' && modalTask && (
         <FeedbackModal
           task={modalTask}
-          onClose={close}
+          onClose={closeModal}
           onSubmit={async feedback => {
-            await apiAction(`/tasks/${modalTask.id}/feedback`, 'POST', { feedback });
+            await fetch(`/tasks/${modalTask.id}/feedback`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ feedback }),
+            });
           }}
         />
       )}
       {modal === 'memory' && modalTask && (
-        <MemoryModal task={modalTask} onClose={close} />
+        <MemoryModal task={modalTask} onClose={closeModal} />
       )}
       {modal === 'commit' && modalTask && (
-        <CommitModal task={modalTask} onClose={close} />
+        <CommitModal task={modalTask} onClose={closeModal} />
       )}
       {modal === 'merge' && modalTask && (
-        <MergeModal task={modalTask} onClose={close} />
+        <MergeModal task={modalTask} onClose={closeModal} />
       )}
       {modal === 'mergeComplete' && modalTask && (
-        <MergeModal task={modalTask} onClose={close} completeOnMerge />
+        <MergeModal task={modalTask} onClose={closeModal} completeOnMerge />
       )}
       {modal === 'gitInit' && modalTask && (
-        <GitInitModal task={modalTask} onConfirm={onGitInitConfirm} onClose={close} />
+        <GitInitModal task={modalTask} onConfirm={onGitInitConfirm} onClose={closeModal} />
       )}
     </div>
   );

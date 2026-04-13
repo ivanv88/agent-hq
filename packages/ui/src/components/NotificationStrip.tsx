@@ -1,22 +1,18 @@
 import { useEffect, useState } from 'react';
-import type { Notification } from '@lacc/shared';
 import { X } from 'lucide-react';
 import { Button } from './ui/Button.js';
+import { useLastNotification } from '../context/NotificationContext.js';
 
 interface NotifEntry {
   id: number;
-  notification: Notification;
+  notification: { message: string; level?: string };
 }
 
 let _id = 0;
 
-interface Props {
-  newNotification: Notification | null;
-  onSelectTask: (taskId: string) => void;
-}
-
-export function NotificationStrip({ newNotification, onSelectTask }: Props) {
+export function NotificationStrip() {
   const [entries, setEntries] = useState<NotifEntry[]>([]);
+  const newNotification = useLastNotification();
 
   useEffect(() => {
     if (!newNotification) return;
@@ -40,10 +36,6 @@ export function NotificationStrip({ newNotification, onSelectTask }: Props) {
           key={e.id}
           entry={e}
           index={index}
-          onSelect={() => {
-            if (e.notification.taskId) onSelectTask(e.notification.taskId);
-            setEntries(prev => prev.filter(en => en.id !== e.id));
-          }}
           onDismiss={() => setEntries(prev => prev.filter(en => en.id !== e.id))}
         />
       ))}
@@ -51,16 +43,15 @@ export function NotificationStrip({ newNotification, onSelectTask }: Props) {
   );
 }
 
-function dotColorClass(level: Notification['level']) {
+function dotColorClass(level: string | undefined) {
   if (level === 'error')   return 'bg-status-failed';
   if (level === 'warning') return 'bg-status-spinning';
   return 'bg-status-working';
 }
 
-function NotifCard({ entry, index, onSelect, onDismiss }: {
+function NotifCard({ entry, index, onDismiss }: {
   entry: NotifEntry;
   index: number;
-  onSelect: () => void;
   onDismiss: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);

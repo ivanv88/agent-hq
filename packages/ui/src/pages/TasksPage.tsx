@@ -1,37 +1,19 @@
 import { useState, useCallback } from 'react';
-import type { Task, Notification } from '@lacc/shared';
+import type { Task } from '@lacc/shared';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
 import { TaskList } from '../components/TaskList.js';
 import { DetailPanel } from '../components/DetailPanel.js';
+import { useModal } from '../context/ModalContext.js';
 
 export interface TasksPageProps {
   tasks: Task[];
   activeRepo: string | null;
   modalOpen: boolean;
-  openFeedback: (task: Task) => void;
-  openMemory: (task: Task) => void;
-  openCommit: (task: Task) => void;
-  openMerge: (task: Task) => void;
-  openMergeComplete: (task: Task) => void;
-  openGitInit: (task: Task) => void;
-  apiAction: (path: string, method?: string, body?: unknown) => Promise<void>;
-  onNotify: (notification: Notification) => void;
 }
 
-export function TasksPage({
-  tasks,
-  activeRepo,
-  modalOpen,
-  openFeedback,
-  openMemory,
-  openCommit,
-  openMerge,
-  openMergeComplete,
-  openGitInit,
-  apiAction,
-  onNotify,
-}: TasksPageProps) {
+export function TasksPage({ tasks, activeRepo, modalOpen }: TasksPageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { openMergeComplete, openFeedback, openGitInit } = useModal();
 
   const selectedTask = tasks.find(t => t.id === selectedId) ?? null;
 
@@ -53,16 +35,13 @@ export function TasksPage({
     setSelectedId(taskIds[(idx - 1 + taskIds.length) % taskIds.length]);
   }, [taskIds, selectedId]);
 
-  const restartTask = useCallback(
-    async (task: Task) => {
-      const res = await fetch(`/tasks/${task.id}/restart`, { method: 'POST' });
-      if (!res.ok) {
-        const data = (await res.json()) as { code?: string };
-        if (data.code === 'NOT_A_GIT_REPO') openGitInit(task);
-      }
-    },
-    [openGitInit],
-  );
+  const restartTask = useCallback(async (task: Task) => {
+    const res = await fetch(`/tasks/${task.id}/restart`, { method: 'POST' });
+    if (!res.ok) {
+      const data = (await res.json()) as { code?: string };
+      if (data.code === 'NOT_A_GIT_REPO') openGitInit(task);
+    }
+  }, [openGitInit]);
 
   useKeyboardShortcuts({
     disabled: modalOpen,
@@ -77,27 +56,27 @@ export function TasksPage({
       if (selectedTask?.status === 'READY') openMergeComplete(selectedTask);
     },
     onDiscard: () => {
-      if (selectedTask?.status === 'READY') apiAction(`/tasks/${selectedTask.id}/discard`);
+      if (selectedTask?.status === 'READY') fetch(`/tasks/${selectedTask.id}/discard`, { method: 'POST' });
     },
     onFeedback: () => {
       if (selectedTask) openFeedback(selectedTask);
     },
     onOpenEditor: () => {
-      if (selectedTask?.worktreePath) apiAction(`/tasks/${selectedTask.id}/open-editor`);
+      if (selectedTask?.worktreePath) fetch(`/tasks/${selectedTask.id}/open-editor`, { method: 'POST' });
     },
     onOpenBrowser: () => {
       if (selectedTask?.devServerUrl) window.open(selectedTask.devServerUrl, '_blank');
     },
     onKill: () => {
-      if (selectedTask) apiAction(`/tasks/${selectedTask.id}`, 'DELETE');
+      if (selectedTask) fetch(`/tasks/${selectedTask.id}`, { method: 'DELETE' });
     },
     onPause: () => {
       if (!selectedTask) return;
       const action = selectedTask.status === 'PAUSED' ? 'resume' : 'pause';
-      apiAction(`/tasks/${selectedTask.id}/${action}`);
+      fetch(`/tasks/${selectedTask.id}/${action}`, { method: 'POST' });
     },
     onResume: () => {
-      if (selectedTask) apiAction(`/tasks/${selectedTask.id}/resume`);
+      if (selectedTask) fetch(`/tasks/${selectedTask.id}/resume`, { method: 'POST' });
     },
     onRestart: () => {
       if (selectedTask) restartTask(selectedTask);
@@ -112,30 +91,7 @@ export function TasksPage({
         onSelect={setSelectedId}
         activeRepo={activeRepo}
       />
-      <DetailPanel
-        task={selectedTask}
-        onComplete={openMergeComplete}
-        onDiscard={task => apiAction(`/tasks/${task.id}/discard`)}
-        onFeedback={openFeedback}
-        onOpenEditor={task => apiAction(`/tasks/${task.id}/open-editor`)}
-        onKill={task => apiAction(`/tasks/${task.id}`, 'DELETE')}
-        onPause={task => apiAction(`/tasks/${task.id}/pause`)}
-        onResume={task => apiAction(`/tasks/${task.id}/resume`)}
-        onRestart={restartTask}
-        onMemory={openMemory}
-        onCommit={openCommit}
-        onMerge={openMerge}
-        onWorkflowContinue={async (taskId) => {
-          await fetch(`/tasks/${taskId}/stage/continue`, { method: 'POST' });
-        }}
-        onWorkflowSkip={async (taskId) => {
-          await fetch(`/tasks/${taskId}/stage/skip`, { method: 'POST' });
-        }}
-        onWorkflowRerun={async (taskId) => {
-          await fetch(`/tasks/${taskId}/stage/rerun`, { method: 'POST' });
-        }}
-        onNotify={onNotify}
-      />
+      <DetailPanel task={selectedTask} />
     </div>
   );
 }
