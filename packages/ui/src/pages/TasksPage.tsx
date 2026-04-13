@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { Task } from '@lacc/shared';
+import type { Task, Notification } from '@lacc/shared';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js';
 import { TaskList } from '../components/TaskList.js';
 import { DetailPanel } from '../components/DetailPanel.js';
@@ -15,6 +15,7 @@ export interface TasksPageProps {
   openMergeComplete: (task: Task) => void;
   openGitInit: (task: Task) => void;
   apiAction: (path: string, method?: string, body?: unknown) => Promise<void>;
+  onNotify: (notification: Notification) => void;
 }
 
 export function TasksPage({
@@ -28,6 +29,7 @@ export function TasksPage({
   openMergeComplete,
   openGitInit,
   apiAction,
+  onNotify,
 }: TasksPageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -132,6 +134,7 @@ export function TasksPage({
         onWorkflowRerun={async (taskId) => {
           await fetch(`/tasks/${taskId}/stage/rerun`, { method: 'POST' });
         }}
+        onNotify={onNotify}
       />
     </div>
   );

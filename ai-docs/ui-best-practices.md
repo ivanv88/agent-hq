@@ -345,3 +345,55 @@ import { labelClassName } from './ui/FormField.js';
 
 <label className={labelClassName}>Custom label</label>
 ```
+
+---
+
+## 8. Notifications
+
+### Always use NotificationStrip — never custom banners
+
+All ephemeral feedback (success, error, warnings) must go through `NotificationStrip`. Never add inline `<div>` banners or local state-based feedback UI inside components.
+
+`NotificationStrip` is rendered once in `AppShell` and fed via `lastNotification` state:
+
+```tsx
+// App.tsx (AppShell)
+const [lastNotification, setLastNotification] = useState<Notification | null>(null);
+
+// Feed it to the strip
+<NotificationStrip newNotification={lastNotification} onSelectTask={...} />
+
+// Pass the setter down to components that need to notify
+<TasksPage onNotify={setLastNotification} ... />
+```
+
+Components receive `onNotify: (notification: Notification) => void` as a prop and call it directly:
+
+```tsx
+// In a component
+onNotify({ message: 'Pushed successfully', level: 'info' });
+onNotify({ message: 'Push failed', level: 'error' });
+```
+
+The `Notification` type is:
+
+```ts
+interface Notification {
+  message: string;
+  level: 'info' | 'warning' | 'error';
+  taskId?: string;  // optional — strip will make it clickable
+}
+```
+
+### Do not use local feedback state
+
+This pattern is forbidden:
+
+```tsx
+// BAD — do not do this
+const [feedback, setFeedback] = useState<string | null>(null);
+// ...
+{feedback && <div className="...">{feedback}</div>}
+```
+
+Thread `onNotify` through props instead.

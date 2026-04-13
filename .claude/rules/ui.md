@@ -45,6 +45,12 @@ Full patterns and code examples: `ai-docs/ui-best-practices.md`. These rules are
 - Never render a raw `<input>` or `<textarea>` with a label beside it — always use `FormField` or `FormTextarea`
 - Standalone label elements import `labelClassName` from `FormField.tsx` instead of duplicating the class string
 
+## Notifications
+
+- Always use `NotificationStrip` for ephemeral feedback — never add inline `<div>` banners or local feedback state
+- Components receive `onNotify: (notification: Notification) => void` as a prop and call it directly
+- `NotificationStrip` is rendered once in `AppShell`; thread `onNotify` (which is `setLastNotification`) down through props
+
 ## Status Rendering
 
 - Use `<StatusIndicator>` for rendering status in context

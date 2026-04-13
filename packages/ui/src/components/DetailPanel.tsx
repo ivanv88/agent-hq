@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import type { Task } from '@lacc/shared';
+import type { Task, Notification } from '@lacc/shared';
 import { DiffView } from './DiffView.js';
 import { ActionBar } from './ActionBar.js';
 import { Tabs, TabBadge, type Tab } from './ui/Tabs.js';
@@ -26,21 +26,20 @@ interface Props {
   onWorkflowContinue: (taskId: string) => void;
   onWorkflowSkip: (taskId: string) => void;
   onWorkflowRerun: (taskId: string) => void;
+  onNotify: (notification: Notification) => void;
 }
 
 export function DetailPanel({
   task, onComplete, onDiscard, onFeedback,
   onOpenEditor, onKill, onPause, onResume, onRestart, onMemory, onCommit, onMerge,
-  onWorkflowContinue, onWorkflowSkip, onWorkflowRerun
+  onWorkflowContinue, onWorkflowSkip, onWorkflowRerun, onNotify
 }: Props) {
   const [tab, setTab] = useState<TabId>('feed');
   const [slashPrefix, setSlashPrefix] = useState<string | null>(null);
   const [memoryContent, setMemoryContent] = useState<string | null>(null);
-  const [actionFeedback, setActionFeedback] = useState<{ message: string; isError: boolean } | null>(null);
 
   const notify = (message: string, isError = false) => {
-    setActionFeedback({ message, isError });
-    setTimeout(() => setActionFeedback(null), 4000);
+    onNotify({ message, level: isError ? 'error' : 'info' });
   };
 
   const { messages, appendUserMessage } = useTaskFeed(task?.id ?? null, task?.retryCount ?? 0);
@@ -266,13 +265,6 @@ export function DetailPanel({
           </div>
         )}
       </div>
-
-      {/* Ephemeral action feedback banner */}
-      {actionFeedback && (
-        <div className={`px-4 py-2 text-xs shrink-0 ${actionFeedback.isError ? 'bg-status-failed-bg text-status-failed' : 'bg-surface-raised text-text-secondary'}`}>
-          {actionFeedback.message}
-        </div>
-      )}
 
       {/* Action bar — kept alongside CommandBox for buttons not yet in palette */}
       <ActionBar

@@ -158,6 +158,7 @@ function AppShell() {
             openMergeComplete={openMergeComplete}
             openGitInit={openGitInit}
             apiAction={apiAction}
+            onNotify={setLastNotification}
           />
         </div>
 
