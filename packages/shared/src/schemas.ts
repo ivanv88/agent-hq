@@ -30,7 +30,7 @@ export const ConfigPatchSchema = z.object({
   poolSize: z.number().int().min(0).max(20).optional(),
   costAlertThreshold: z.number().min(0).optional(),
   spinDetectionWindowMin: z.number().min(1).optional(),
-  worktreeAutoDeleteHours: z.number().min(0).optional(),
+  globalLaccPath: z.string().optional(),
   editorCommand: z.string().optional(),
   defaultModel: z.string().optional(),
   defaultOversightMode: z.enum(['GATE_ON_COMPLETION', 'GATE_ALWAYS', 'NOTIFY_ONLY']).optional(),

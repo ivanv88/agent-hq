@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import type { Task } from '@lacc/shared';
 import { getDb } from '../db/init.js';
-import { getTaskStoragePath } from '../storage/lacc.js';
+import { getTaskStoragePath, ensureTaskStoragePath } from '../storage/lacc.js';
 
 function readIfExists(filePath: string): string | null {
   try { return fs.readFileSync(filePath, 'utf-8'); } catch { return null; }
@@ -97,7 +97,7 @@ export async function saveMemorySnapshot(task: Task): Promise<string> {
   const content = await generateMemorySnapshot(task);
   if (!content) return '';
 
-  const storagePath = getTaskStoragePath(task.repoPath, task.id);
+  const storagePath = ensureTaskStoragePath(task.repoPath, task.id);
   if (storagePath) {
     fs.writeFileSync(path.join(storagePath, 'memory.md'), content, 'utf-8');
   }

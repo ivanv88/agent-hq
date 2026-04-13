@@ -351,6 +351,11 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       const task = getTask(id);
       if (!task) return reply.code(404).send({ error: 'Task not found' });
 
+      const activeStatuses = ['SPAWNING', 'WORKING', 'SPINNING', 'RATE_LIMITED', 'PAUSED'];
+      if (activeStatuses.includes(task.status)) {
+        return reply.code(409).send({ error: 'Cannot archive an active task — kill it first' });
+      }
+
       updateTask(id, { archiveState: level as import('@lacc/shared').ArchiveState });
 
       // If deleting task artifacts, clean them up immediately
@@ -379,6 +384,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     if (!task) return reply.code(404).send({ error: 'Task not found' });
     const { saveMemorySnapshot } = await import('../memory/snapshot.js');
     const content = await saveMemorySnapshot(task);
+    if (!content) return reply.code(500).send({ error: 'Memory snapshot generation failed' });
     return { content };
   });
 

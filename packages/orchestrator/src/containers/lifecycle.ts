@@ -231,9 +231,8 @@ export async function configure(
     `${task.repoPath}:/original-repo:ro`, // Issue 7 fix
   ];
 
-  // Mount global LACC library read-only
-  const laccDataDir = path.join(os.homedir(), '.lacc-data');
-  binds.push(`${laccDataDir}:/lacc-global:ro`);
+  // Mount global LACC library read-only (uses configured globalLaccPath)
+  binds.push(`${config.globalLaccPath}:/lacc-global:ro`);
 
   // Mount task storage at /workspace/.lacc if repo uses global mode
   const { getContainerTaskMount } = await import('../storage/lacc.js');

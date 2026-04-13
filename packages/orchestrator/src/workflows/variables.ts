@@ -122,14 +122,32 @@ export async function resolveStagePrompt(
   const archiveMatches = [...prompt.matchAll(ARCHIVE_RE)];
   if (archiveMatches.length > 0) {
     const { getTaskStoragePath } = await import('../storage/lacc.js');
+    const { getDb } = await import('../db/init.js');
 
     for (const match of archiveMatches) {
       const [token, arg] = match;
-      const taskId = arg.trim();
+      const trimmed = arg.trim();
+
+      let resolvedTaskId: string | null = null;
+
+      if (trimmed === 'latest') {
+        // Most recent completed task on same repo, excluding deleted
+        const row = getDb().prepare(
+          `SELECT id FROM tasks
+           WHERE repo_path = ?
+             AND archive_state != 'deleted'
+             AND (completed_at IS NOT NULL OR created_at IS NOT NULL)
+           ORDER BY COALESCE(completed_at, created_at) DESC
+           LIMIT 1`
+        ).get(task.repoPath) as { id: string } | undefined;
+        resolvedTaskId = row?.id ?? null;
+      } else {
+        resolvedTaskId = trimmed;
+      }
 
       let memoryContent = '';
-      if (taskId) {
-        const storagePath = getTaskStoragePath(task.repoPath, taskId);
+      if (resolvedTaskId) {
+        const storagePath = getTaskStoragePath(task.repoPath, resolvedTaskId);
         if (storagePath) {
           try {
             memoryContent = fs.readFileSync(

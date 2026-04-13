@@ -59,10 +59,22 @@ export function getLaccRoot(repoPath: string): LaccRoot {
 }
 
 /**
- * Get (and create) the task storage path for a given task.
- * Returns null if repo has no .lacc configuration.
+ * Find the task storage path without creating directories.
+ * Returns the path if the root exists (even if task dir doesn't yet), null if unconfigured.
+ * Use this for read operations — does not create directories.
  */
 export function getTaskStoragePath(repoPath: string, taskId: string): string | null {
+  const { root } = getLaccRoot(repoPath);
+  if (!root) return null;
+  return path.join(root, 'tasks', taskId);
+}
+
+/**
+ * Get (and create) the task storage path for a given task.
+ * Returns null if repo has no .lacc configuration.
+ * Use this for write operations — creates the directory if it doesn't exist.
+ */
+export function ensureTaskStoragePath(repoPath: string, taskId: string): string | null {
   const { root } = getLaccRoot(repoPath);
   if (!root) return null;
   const p = path.join(root, 'tasks', taskId);
@@ -104,7 +116,7 @@ export function initLaccDir(root: string): void {
   if (!fs.existsSync(configPath)) {
     fs.writeFileSync(configPath, [
       '# LACC repo configuration',
-      'commitLacc: false',
+      'commitLacc: true',
       'baseBranch: main',
       'defaultWorkflow: null',
     ].join('\n') + '\n');
