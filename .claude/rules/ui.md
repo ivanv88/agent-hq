@@ -48,8 +48,22 @@ Full patterns and code examples: `ai-docs/ui-best-practices.md`. These rules are
 ## Notifications
 
 - Always use `NotificationStrip` for ephemeral feedback — never add inline `<div>` banners or local feedback state
-- Components receive `onNotify: (notification: Notification) => void` as a prop and call it directly
-- `NotificationStrip` is rendered once in `AppShell`; thread `onNotify` (which is `setLastNotification`) down through props
+- Call `useNotify()` from `NotificationContext` directly in any component or hook that needs to emit a notification — never prop-drill `onNotify`
+- `NotificationStrip` is rendered once in `AppShell` and reads from context automatically
+
+## Container / UI Component Pattern
+
+- **Containers** own state, hooks, effects, and API calls — they coordinate. **UI components** receive props and render.
+- When a component receives more than ~4 callbacks as props, make it a container and have it call contexts/hooks directly
+- Containers may have child containers — the rule is clear ownership of a concern, not a flat hierarchy
+- Never prop-drill `useModal()` or `useNotify()` values — containers call these hooks directly
+
+## Service + Facade Hook
+
+- When a container has 5+ `useCallback` declarations for API actions, extract them: pure fetch calls go in `src/services/`, orchestration goes in a facade hook in `src/hooks/`
+- Service modules (`taskService.ts`, etc.) are plain functions — no React, no hooks, no state
+- Facade hooks use the stable ref pattern: `ref.current = { task, modal, notify }` on every render, all `useCallback`s have `[]` deps and read from `ref.current` — this gives permanently stable function identities with no stale closures
+- See `src/hooks/useTaskActions.ts` + `src/services/taskService.ts` for the canonical example
 
 ## Status Rendering
 

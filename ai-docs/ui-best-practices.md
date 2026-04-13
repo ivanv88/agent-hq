@@ -354,46 +354,194 @@ import { labelClassName } from './ui/FormField.js';
 
 All ephemeral feedback (success, error, warnings) must go through `NotificationStrip`. Never add inline `<div>` banners or local state-based feedback UI inside components.
 
-`NotificationStrip` is rendered once in `AppShell` and fed via `lastNotification` state:
+`NotificationStrip` is rendered once in `AppShell` and reads from `NotificationContext` automatically. Any component or hook calls `useNotify()` to emit a notification:
 
 ```tsx
-// App.tsx (AppShell)
-const [lastNotification, setLastNotification] = useState<Notification | null>(null);
+import { useNotify } from '../context/NotificationContext.js';
 
-// Feed it to the strip
-<NotificationStrip newNotification={lastNotification} onSelectTask={...} />
+function MyComponent() {
+  const notify = useNotify();
 
-// Pass the setter down to components that need to notify
-<TasksPage onNotify={setLastNotification} ... />
-```
-
-Components receive `onNotify: (notification: Notification) => void` as a prop and call it directly:
-
-```tsx
-// In a component
-onNotify({ message: 'Pushed successfully', level: 'info' });
-onNotify({ message: 'Push failed', level: 'error' });
-```
-
-The `Notification` type is:
-
-```ts
-interface Notification {
-  message: string;
-  level: 'info' | 'warning' | 'error';
-  taskId?: string;  // optional — strip will make it clickable
+  const handleAction = async () => {
+    const res = await fetch('/api/something', { method: 'POST' });
+    if (!res.ok) notify('Action failed', true);  // true = error level
+    else notify('Done');
+  };
 }
 ```
 
-### Do not use local feedback state
+### Do not use local feedback state or prop-drill onNotify
 
-This pattern is forbidden:
+These patterns are forbidden:
 
 ```tsx
-// BAD — do not do this
+// BAD — local state feedback
 const [feedback, setFeedback] = useState<string | null>(null);
-// ...
 {feedback && <div className="...">{feedback}</div>}
+
+// BAD — prop drilling
+function Parent() {
+  const [lastNotification, setLastNotification] = useState(null);
+  return <Child onNotify={setLastNotification} />;
+}
 ```
 
-Thread `onNotify` through props instead.
+Use `useNotify()` from context directly in the component or hook that produces the notification.
+
+---
+
+## 9. Container / UI Component Pattern
+
+### Separate logic from presentation
+
+Components fall into two categories:
+
+- **Container**: owns state, effects, hooks, and API calls. Coordinates data flow. May render child containers.
+- **UI component**: receives props and renders JSX. No hooks beyond `useState` for local UI state (e.g. open/closed).
+
+```tsx
+// Container — orchestrates
+export function ActionBar({ task }: { task: Task }) {
+  const actions = useTaskActions(task);
+  const [showArchive, setShowArchive] = useState(false);
+  // ... renders JSX using actions
+}
+
+// UI component — pure presentation
+export function Button({ variant, children, ...props }: ButtonProps) {
+  return <button className={variantClasses[variant]} {...props}>{children}</button>;
+}
+```
+
+### When to split
+
+A component needs to become a container (or be refactored) when:
+- It receives more than ~4 callbacks as props
+- The same modal-opening or API-calling logic is needed in multiple places
+- Callbacks defined inside it are so complex they obscure the JSX
+
+Containers can have child containers — the rule is that each container owns a well-defined concern, not that there can only be one.
+
+### Contexts are container infrastructure
+
+`useModal()` and `useNotify()` are the two global contexts. Containers call them directly — never thread them as props.
+
+```tsx
+// Good — container calls context directly
+function ActionBar({ task }) {
+  const { openCommit } = useModal();
+  return <Button onClick={() => openCommit(task)}>Commit</Button>;
+}
+
+// Bad — prop drilling context values
+function ActionBar({ task, onCommit }) { ... }
+function Parent({ task }) {
+  const { openCommit } = useModal();
+  return <ActionBar task={task} onCommit={() => openCommit(task)} />;
+}
+```
+
+---
+
+## 10. Service + Facade Hook
+
+### Extract API calls to a service module
+
+When a container makes multiple `fetch` calls, move the raw calls to a service module (`src/services/`). Service functions are plain async functions — no React, no state, no hooks. This makes them independently readable and testable.
+
+```ts
+// src/services/taskService.ts
+const post = (path: string) => fetch(path, { method: 'POST' });
+
+export const taskService = {
+  restart:  (id: string) => post(`/tasks/${id}/restart`),
+  pause:    (id: string) => post(`/tasks/${id}/pause`),
+  gitPull:  (id: string) => post(`/api/tasks/${id}/git/pull`),
+  archive:  (id: string, level: string) => fetch(`/api/tasks/${id}/archive`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level }),
+  }),
+  // ...
+};
+```
+
+### Bundle handlers into a facade hook
+
+When a container has many `useCallback` declarations for related actions, extract them into a single facade hook. The hook orchestrates the service layer with contexts, and returns named handlers. Containers call the hook and wire to JSX.
+
+```ts
+// src/hooks/useTaskActions.ts
+export function useTaskActions(task: Task | null): TaskActions {
+  const modal = useModal();
+  const notify = useNotify();
+  // Keep a ref so all returned functions are permanently stable
+  const ref = useRef({ task, modal, notify });
+  ref.current = { task, modal, notify };
+
+  const restart = useCallback(async () => {
+    const { task, modal } = ref.current;
+    if (!task) return;
+    const res = await taskService.restart(task.id);
+    if (!res.ok) {
+      const data = await res.json() as { code?: string };
+      if (data.code === 'NOT_A_GIT_REPO') modal.openGitInit(task);
+    }
+  }, []);
+
+  return {
+    restart,
+    pause:  () => ref.current.task && taskService.pause(ref.current.task.id),
+    gitPull: () => gitOp('gitPull', 'Pull'),
+    openCommit: () => ref.current.task && ref.current.modal.openCommit(ref.current.task),
+    // ...
+  };
+}
+
+// Container becomes thin
+export function ActionBar({ task }: { task: Task }) {
+  const actions = useTaskActions(task);
+  return <Button onClick={actions.restart}>Restart</Button>;
+}
+```
+
+### The stable ref pattern
+
+Facade hooks that return many callbacks use a ref to hold the latest props/context values. This means every returned function has a stable identity (never changes) while always reading current values — no stale closures, no dep array churn.
+
+```ts
+const ref = useRef({ task, modal, notify });
+ref.current = { task, modal, notify };  // update every render
+
+// All useCallbacks have [] deps — stable forever
+const restart = useCallback(async () => {
+  const { task, modal } = ref.current;  // always current
+  // ...
+}, []);
+```
+
+### Signal to refactor
+
+Apply the service + facade hook pattern when a container has 5+ `useCallback` declarations for API actions. The before/after looks like:
+
+```tsx
+// Before — cluttered container
+export function ActionBar({ task }) {
+  const notify = useNotify();
+  const { openGitInit } = useModal();
+
+  const restart = useCallback(async () => { ... }, [task, openGitInit]);
+  const gitPull  = useCallback(async () => { ... }, [task.id, notify]);
+  const gitPush  = useCallback(async () => { ... }, [task.id, notify]);
+  const archive  = useCallback(async (level) => { ... }, [task.id, notify]);
+  // ... 8 more
+
+  return <div>...</div>;
+}
+
+// After — thin container
+export function ActionBar({ task }: { task: Task }) {
+  const actions = useTaskActions(task);
+  return <div>...</div>;
+}
+```
