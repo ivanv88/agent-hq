@@ -2,17 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## AI Docs
+## Docs
 
-`ai-docs/` contains specs, plans, and templates for AI agents. **Read files here only when directly relevant to the current task — do not load them upfront.**
+`ai-docs/` is the single documentation directory. **Read files here only when directly relevant to the current task — do not load them upfront.**
+
+### Reference (stable, read when relevant)
 
 - `local_agent_command_center_specs.md` — Full product spec
 - `implementation_plan.md` — Staged implementation plan
 - `build-checklist.md` — Per-stage verification checklist (✅/🔲/⚠️)
 - `verification-plan.md` — Step-by-step manual verification plans per feature
-- `templates/` — Reusable prompt/task templates
 - `style-guide.md` — Design tokens, typography, colors, spacing reference. Read when building or modifying UI.
 - `ui-best-practices.md` — Detailed patterns and code examples for UI. Referenced by `.claude/rules/ui.md` (auto-loaded for `packages/ui/**`).
+- `templates/` — Reusable prompt/task templates
+
+### Generated (written by agents during design/planning)
+
+- `specs/` — Design documents (`YYYY-MM-DD-<topic>-design.md`). Written by the brainstorming skill.
+- `plans/` — Implementation plans (`YYYY-MM-DD-<topic>.md`). Written by the writing-plans skill.
 
 ## Commands
 
