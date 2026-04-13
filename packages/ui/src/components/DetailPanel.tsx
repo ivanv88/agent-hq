@@ -36,6 +36,12 @@ export function DetailPanel({
   const [tab, setTab] = useState<TabId>('feed');
   const [slashPrefix, setSlashPrefix] = useState<string | null>(null);
   const [memoryContent, setMemoryContent] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ message: string; isError: boolean } | null>(null);
+
+  const notify = (message: string, isError = false) => {
+    setActionFeedback({ message, isError });
+    setTimeout(() => setActionFeedback(null), 4000);
+  };
 
   const { messages, appendUserMessage } = useTaskFeed(task?.id ?? null, task?.retryCount ?? 0);
 
@@ -127,9 +133,12 @@ export function DetailPanel({
   function handleRegenerateMemory() {
     if (!task) return;
     fetch(`/api/tasks/${task.id}/memory-snapshot`, { method: 'POST' })
-      .then(r => r.json())
-      .then(data => setMemoryContent(data.content ?? null))
-      .catch(() => {});
+      .then(async r => {
+        if (!r.ok) { notify((await r.json()).error ?? 'Regeneration failed', true); return; }
+        const data = await r.json();
+        setMemoryContent(data.content ?? null);
+      })
+      .catch(() => notify('Regeneration failed — network error', true));
   }
 
   if (!task) {
@@ -258,6 +267,13 @@ export function DetailPanel({
         )}
       </div>
 
+      {/* Ephemeral action feedback banner */}
+      {actionFeedback && (
+        <div className={`px-4 py-2 text-xs shrink-0 ${actionFeedback.isError ? 'bg-status-failed-bg text-status-failed' : 'bg-surface-raised text-text-secondary'}`}>
+          {actionFeedback.message}
+        </div>
+      )}
+
       {/* Action bar — kept alongside CommandBox for buttons not yet in palette */}
       <ActionBar
         task={task}
@@ -278,27 +294,60 @@ export function DetailPanel({
         onWorkflowRerun={() => onWorkflowRerun(task.id)}
         onSaveMemory={() => {
           fetch(`/api/tasks/${task.id}/memory-snapshot`, { method: 'POST' })
-            .then(r => r.json())
-            .catch(() => {});
+            .then(async r => {
+              if (!r.ok) { notify((await r.json()).error ?? 'Snapshot failed', true); return; }
+              const data = await r.json();
+              setMemoryContent(data.content ?? null);
+              notify('Memory snapshot saved');
+            })
+            .catch(() => notify('Snapshot failed — network error', true));
         }}
         onArchive={(level) => {
           fetch(`/api/tasks/${task.id}/archive`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ level }),
-          }).catch(() => {});
+          })
+            .then(async r => {
+              if (!r.ok) { notify((await r.json()).error ?? 'Archive failed', true); }
+            })
+            .catch(() => notify('Archive failed — network error', true));
         }}
         onGitPull={() => {
-          fetch(`/api/tasks/${task.id}/git/pull`, { method: 'POST' }).catch(() => {});
+          fetch(`/api/tasks/${task.id}/git/pull`, { method: 'POST' })
+            .then(async r => {
+              const data = await r.json();
+              if (!data.ok) notify(data.message ?? 'Pull failed', true);
+              else notify('Pulled successfully');
+            })
+            .catch(() => notify('Pull failed — network error', true));
         }}
         onGitPush={() => {
-          fetch(`/api/tasks/${task.id}/git/push`, { method: 'POST' }).catch(() => {});
+          fetch(`/api/tasks/${task.id}/git/push`, { method: 'POST' })
+            .then(async r => {
+              const data = await r.json();
+              if (!data.ok) notify(data.message ?? 'Push failed', true);
+              else notify('Pushed successfully');
+            })
+            .catch(() => notify('Push failed — network error', true));
         }}
         onGitRebase={() => {
-          fetch(`/api/tasks/${task.id}/git/rebase`, { method: 'POST' }).catch(() => {});
+          fetch(`/api/tasks/${task.id}/git/rebase`, { method: 'POST' })
+            .then(async r => {
+              const data = await r.json();
+              if (!data.ok) notify(data.message ?? 'Rebase failed', true);
+              else notify('Rebased successfully');
+            })
+            .catch(() => notify('Rebase failed — network error', true));
         }}
         onGitStash={() => {
-          fetch(`/api/tasks/${task.id}/git/stash`, { method: 'POST' }).catch(() => {});
+          fetch(`/api/tasks/${task.id}/git/stash`, { method: 'POST' })
+            .then(async r => {
+              const data = await r.json();
+              if (!data.ok) notify(data.message ?? 'Stash failed', true);
+              else notify('Stashed successfully');
+            })
+            .catch(() => notify('Stash failed — network error', true));
         }}
       />
     </div>
