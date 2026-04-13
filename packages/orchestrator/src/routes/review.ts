@@ -13,6 +13,7 @@ import { releasePort } from '../containers/ports.js';
 import { stopSpinDetector } from '../workers/spin.js';
 import { stopRateLimitWatcher } from '../streaming/ratelimit.js';
 import { SaveMemoryInputSchema } from '@lacc/shared';
+import { OK, promptFirstLine } from './utils.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -57,7 +58,7 @@ export function registerReviewRoutes(fastify: FastifyInstance) {
         // Only commit if something was staged
         const { stdout: status } = await execFileAsync('git', ['status', '--porcelain'], { cwd: worktreeCwd });
         if (status.trim()) {
-          const autoMsg = `auto: stage all changes\n\n${task.prompt.split('\n')[0].slice(0, 72)}`;
+          const autoMsg = `auto: stage all changes\n\n${promptFirstLine(task.prompt)}`;
           await execFileAsync('git', ['commit', '-m', autoMsg], { cwd: worktreeCwd });
         }
       } catch (err) {
@@ -106,7 +107,7 @@ export function registerReviewRoutes(fastify: FastifyInstance) {
     });
 
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
-    return { ok: true };
+    return OK;
   });
 
   // Discard → DISCARDED (kills container, removes worktree, deletes branch immediately)

@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import type { CommandDefinition, WorkflowDefinition } from '@lacc/shared';
 import { listCommands, getCommand, saveCommand, deleteCommand, listWorkflows, getWorkflow, saveWorkflow, deleteWorkflow } from '../db/workflows.js';
+import { OK } from './utils.js';
 
 export function registerWorkflowRoutes(fastify: FastifyInstance) {
 
@@ -13,23 +15,22 @@ export function registerWorkflowRoutes(fastify: FastifyInstance) {
     return cmd;
   });
 
-  fastify.post<{ Body: unknown }>('/commands', async (req, reply) => {
-    const cmd = req.body as import('@lacc/shared').CommandDefinition;
+  fastify.post<{ Body: CommandDefinition }>('/commands', async (req, reply) => {
+    const cmd = req.body;
     if (!cmd?.filename) return reply.status(400).send({ error: 'filename required' });
     saveCommand(cmd.filename, cmd);
-    return { ok: true };
+    return OK;
   });
 
-  fastify.put<{ Params: { name: string }; Body: unknown }>('/commands/:name', async (req, reply) => {
-    const cmd = req.body as import('@lacc/shared').CommandDefinition;
-    saveCommand(req.params.name, cmd);
-    return { ok: true };
+  fastify.put<{ Params: { name: string }; Body: CommandDefinition }>('/commands/:name', async (req) => {
+    saveCommand(req.params.name, req.body);
+    return OK;
   });
 
   fastify.delete<{ Params: { name: string } }>('/commands/:name', async (req, reply) => {
     const deleted = deleteCommand(req.params.name);
     if (!deleted) return reply.status(404).send({ error: 'Command not found' });
-    return { ok: true };
+    return OK;
   });
 
   // ── Workflows ────────────────────────────────────────────────────────────
@@ -42,22 +43,21 @@ export function registerWorkflowRoutes(fastify: FastifyInstance) {
     return workflow;
   });
 
-  fastify.post<{ Body: unknown }>('/workflows', async (req, reply) => {
-    const wf = req.body as import('@lacc/shared').WorkflowDefinition;
+  fastify.post<{ Body: WorkflowDefinition }>('/workflows', async (req, reply) => {
+    const wf = req.body;
     if (!wf?.name) return reply.status(400).send({ error: 'name required' });
     saveWorkflow(wf.name, wf);
-    return { ok: true };
+    return OK;
   });
 
-  fastify.put<{ Params: { name: string }; Body: unknown }>('/workflows/:name', async (req, reply) => {
-    const wf = req.body as import('@lacc/shared').WorkflowDefinition;
-    saveWorkflow(req.params.name, wf);
-    return { ok: true };
+  fastify.put<{ Params: { name: string }; Body: WorkflowDefinition }>('/workflows/:name', async (req) => {
+    saveWorkflow(req.params.name, req.body);
+    return OK;
   });
 
   fastify.delete<{ Params: { name: string } }>('/workflows/:name', async (req, reply) => {
     const deleted = deleteWorkflow(req.params.name);
     if (!deleted) return reply.status(404).send({ error: 'Workflow not found' });
-    return { ok: true };
+    return OK;
   });
 }

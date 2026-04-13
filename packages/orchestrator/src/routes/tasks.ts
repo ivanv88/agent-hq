@@ -13,6 +13,7 @@ import { getGlobalConfig } from '../config/global.js';
 import { loadRepoConfig, mergeConfigs } from '../config/repo.js';
 import { readDevcontainerConfig } from '../containers/devcontainer.js';
 import { assignPort, releasePort, reclaimPort } from '../containers/ports.js';
+import { OK, promptFirstLine, zeroCost } from './utils.js';
 import { claim, configure, watchExecUntilDone, runPostCreate, killContainer, killImmediate, killTaskContainerIfExists, pauseContainer, resumeContainer, resumeClaudeAfterRateLimit } from '../containers/lifecycle.js';
 import { createWorktree, generateBranchName, isGitRepo } from '../git/worktree.js';
 import { startLogPipe, preloadFromDb, getRingBuffer, hasActiveStream, logEmitter, RING_SIZE, injectLogLine } from '../streaming/logs.js';
@@ -105,9 +106,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       planFirst: input.planFirst ?? false,
       maxRetries: input.maxRetries ?? 3,
       retryCount: 0,
-      costUsd: 0,
-      inputTokens: 0,
-      outputTokens: 0,
+      ...zeroCost,
       contextTokensUsed: null,
       lastFileChanged: null,
       rateLimitRetryAfter: null,
@@ -177,7 +176,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     await pauseContainer(task.containerId);
     updateTask(task.id, { status: 'PAUSED' });
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
-    return { ok: true };
+    return OK;
   });
 
   // Resume task
@@ -205,7 +204,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
 
     updateTask(task.id, { status: 'WORKING', rateLimitRetryAfter: null });
     broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
-    return { ok: true };
+    return OK;
   });
 
   // Restart task
@@ -229,9 +228,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       containerId: undefined,
       startedAt: null,
       completedAt: null,
-      costUsd: 0,
-      inputTokens: 0,
-      outputTokens: 0,
+      ...zeroCost,
       rateLimitRetryAfter: null,
       failureReason: null,
     });
@@ -299,9 +296,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       retryCount: task.retryCount + 1,
       startedAt: null,
       completedAt: null,
-      costUsd: 0,
-      inputTokens: 0,
-      outputTokens: 0,
+      ...zeroCost,
       rateLimitRetryAfter: null,
       failureReason: null,
     });
@@ -334,7 +329,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       spawnTask(fastify, getTask(task.id)!, devcontainerConfig, merged, undefined).catch(onError);
     }
 
-    return { ok: true };
+    return OK;
   });
 
   // Archive task — set retention level
@@ -491,7 +486,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     try {
       await execFileAsync('git', ['add', '-A'], { cwd: task.worktreePath });
       await execFileAsync('git', ['commit', '-m', message], { cwd: task.worktreePath });
-      return { ok: true };
+      return OK;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return reply.status(500).send({ error: msg });
@@ -518,7 +513,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
         await execFileAsync('git', ['add', '-A'], { cwd: worktreeCwd });
         const { stdout: status } = await execFileAsync('git', ['status', '--porcelain'], { cwd: worktreeCwd });
         if (status.trim()) {
-          const autoMsg = `auto: stage all changes\n\n${task.prompt.split('\n')[0].slice(0, 72)}`;
+          const autoMsg = `auto: stage all changes\n\n${promptFirstLine(task.prompt)}`;
           await execFileAsync('git', ['commit', '-m', autoMsg], { cwd: worktreeCwd });
         }
       } catch (err) {
@@ -540,7 +535,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
         await execFileAsync('git', ['merge', '--no-ff', task.branchName, '-m', `Merge branch '${task.branchName}'`], { cwd });
       }
 
-      return { ok: true };
+      return OK;
     } catch (err) {
       await execFileAsync('git', ['merge', '--abort'], { cwd }).catch(() => {});
       const e = err as NodeJS.ErrnoException & { stderr?: string; stdout?: string };
@@ -559,7 +554,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     const { spawn } = await import('child_process');
     spawn(config.editorCommand, [pathToOpen], { detached: true, stdio: 'ignore' }).unref();
 
-    return { ok: true };
+    return OK;
   });
 
   // Open a specific file in editor
@@ -574,7 +569,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     const { spawn } = await import('child_process');
     spawn(config.editorCommand, [filePath], { detached: true, stdio: 'ignore' }).unref();
 
-    return { ok: true };
+    return OK;
   });
 
   // ── Stage control endpoints ───────────────────────────────────────────────
@@ -599,7 +594,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     if (!stage) return reply.status(404).send({ error: `Stage '${task.workflowStage}' not found in workflow` });
 
     await startStage(task, stage, wf, req.body?.extraContext, true /* bypassGate */);
-    return { ok: true };
+    return OK;
   });
 
   // Skip current stage, advance to next
@@ -629,11 +624,11 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
       // No more stages
       updateTask(task.id, { workflowStatus: 'complete', status: 'READY', completedAt: new Date() });
       broadcastWsEvent({ type: 'TASK_UPDATED', task: getTask(task.id)! });
-      return { ok: true };
+      return OK;
     }
 
     await startStage(currentTask, afterCurrent[0], wf);
-    return { ok: true };
+    return OK;
   });
 
   // ── Checkpoint endpoints ──────────────────────────────────────────────────
@@ -698,7 +693,7 @@ export function registerTaskRoutes(fastify: FastifyInstance) {
     if (!stage) return reply.status(404).send({ error: `Stage not found` });
 
     await startStage(task, stage, wf);
-    return { ok: true };
+    return OK;
   });
 }
 

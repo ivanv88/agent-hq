@@ -1,9 +1,9 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getTask } from '../db/tasks.js';
 import { gitPull, gitPush, gitRebase, gitReset, gitStash, gitStashPop } from '../git/operations.js';
 
 export async function registerGitRoutes(fastify: FastifyInstance): Promise<void> {
-  function getWorktree(id: string, reply: any): string | null {
+  function getWorktree(id: string, reply: FastifyReply): string | null {
     const task = getTask(id);
     if (!task) { reply.code(404).send({ error: 'Task not found' }); return null; }
     if (!task.worktreePath) { reply.code(409).send({ error: 'Task has no worktree' }); return null; }

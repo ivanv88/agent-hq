@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getGlobalConfig, saveGlobalConfig } from '../config/global.js';
 import { loadRepoConfig, mergeConfigs } from '../config/repo.js';
 import { ConfigPatchSchema } from '@lacc/shared';
+import { OK } from './utils.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -70,7 +71,7 @@ export function registerConfigRoutes(fastify: FastifyInstance) {
       await execFileAsync('git', ['init'], { cwd: dirPath });
       await execFileAsync('git', ['add', '-A'], { cwd: dirPath });
       await execFileAsync('git', ['commit', '--allow-empty', '-m', 'chore: init repository'], { cwd: dirPath });
-      return { ok: true };
+      return OK;
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
     }
