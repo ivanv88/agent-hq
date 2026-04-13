@@ -18,8 +18,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Generated (written by agents during design/planning)
 
-- `specs/` — Design documents (`YYYY-MM-DD-<topic>-design.md`). Written by the brainstorming skill.
-- `plans/` — Implementation plans (`YYYY-MM-DD-<topic>.md`). Written by the writing-plans skill.
+- `specs/` — Design documents (`YYYY-MM-DD-<topic>-design.md`)
+- `plans/` — Implementation plans (`YYYY-MM-DD-<topic>.md`)
+
+**Agent instruction:** Write all specs to `ai-docs/specs/` and all plans to `ai-docs/plans/`. This overrides any default paths used by brainstorming or writing-plans skills.
 
 ## Commands
 
